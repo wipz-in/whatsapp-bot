@@ -18,9 +18,42 @@ app.get("/webhook", (req, res) => {
   }
 });
 
-app.post("/webhook", (req, res) => {
-  console.log("Incoming:", JSON.stringify(req.body, null, 2));
-  res.sendStatus(200);
+const axios = require("axios");
+
+app.post("/webhook", async (req, res) => {
+  try {
+    const entry = req.body.entry?.[0];
+    const changes = entry?.changes?.[0];
+    const message = changes?.value?.messages?.[0];
+
+    if (message) {
+      const from = message.from;
+      const text = message.text?.body;
+
+      console.log("User:", from, "Message:", text);
+
+      await axios.post(
+        `https://graph.facebook.com/v18.0/973822219157793/messages`,
+        {
+          messaging_product: "whatsapp",
+          to: from,
+          type: "text",
+          text: { body: "Thanks! Your message is received ✅" }
+        },
+        {
+          headers: {
+            Authorization: `Bearer EAALcQJ0mJBABRHcFpj5f8zgVFmoAuaWyCRUmbURlDdVZAZA1RZC9XokE6KtXI25QmQZCP2eHGyVytfA7LN19UgzVfu1tZADqTUN9mUZBSggZATpP3Dlbl1dMWtAmtQCBIYO8AX5tSAGARPCn8ZC3AKhIJfUMRRM7d7g0Yz0U78YxgrJoZB8npKHqZBZCf7ZBv5U1RjQLobcjHqPUrAq6ggODbmGIOHhrayTTuEkSnoGPoSaxdm5jInPy8ZBymBv9qYqM5LZA7baGNepXN2hh9ypjqTviC69b167gZDZD`,
+            "Content-Type": "application/json"
+          }
+        }
+      );
+    }
+
+    res.sendStatus(200);
+  } catch (error) {
+    console.error(error);
+    res.sendStatus(500);
+  }
 });
 
 app.listen(3000, () => console.log("Server running"));
