@@ -5,116 +5,141 @@ const axios = require("axios");
 const app = express();
 app.use(bodyParser.json());
 
-// 🔐 VERIFY TOKEN (keep same as Meta)
 const VERIFY_TOKEN = "my_verify_token";
 
-// 🧠 Simple memory (stores user steps)
+// simple memory
 const userState = {};
 
-// ✅ Webhook verification (DO NOT CHANGE)
+// ✅ WEBHOOK VERIFY (KEEP)
+app.get("/webhook", (req, res) => {
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  if (mode && token === VERIFY_TOKEN) {
+    return res.status(200).send(challenge);
+  } else {
+    return res.sendStatus(403);
+  }
+});
+
+// ✅ MAIN BOT
 app.post("/webhook", async (req, res) => {
   try {
-    const entry = req.body.entry?.[0];
-    const changes = entry?.changes?.[0];
-    const value = changes?.value;
-    const message = value?.messages?.[0];
+    const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
 
-    if (message) {
-      const from = message.from;
-      const type = message.type;
+    if (!message) return res.sendStatus(200);
 
-      console.log("Incoming:", JSON.stringify(message, null, 2));
+    const from = message.from;
+    const type = message.type;
 
-      // INIT USER
-      if (!userState[from]) {
-        userState[from] = { step: 1 };
-      }
+    console.log("Incoming:", JSON.stringify(message, null, 2));
 
-      // 🎯 FIRST MESSAGE (from ad)
-      if (!userState[from] || userState[from].step === 1) {
-  userState[from] = { step: 2 };
+    // 🧠 INIT USER
+    if (!userState[from]) {
+      userState[from] = { step: 1 };
+    }
 
-  await sendList(from); // or sendButtons()
+    // 🔘 BUTTON / LIST CLICK (FIRST PRIORITY)
+    if (type === "interactive") {
+      const id =
+        message.interactive?.button_reply?.id ||
+        message.interactive?.list_reply?.id;
 
-  return res.sendStatus(200);
-}
+      console.log("Clicked:", id);
 
-      // 🔘 BUTTON CLICK HANDLING
-if (type === "interactive") {
-  const buttonId = message.interactive?.button_reply?.id;
-
-  console.log("Button clicked:", buttonId);
-
-  if (buttonId === "current_product") {
-    await sendMessage(
-      from,
-      "Please select your size, color and quantity from the product page 🛍️"
-    );
-  }
-
-  else if (buttonId === "view_catalog") {
-    await sendCatalog(from);
-  }
-
-  return res.sendStatus(200); // ⛔ IMPORTANT STOP HERE
-}
-
-// 🧠 INIT USER
-if (!userState[from]) {
-  userState[from] = { step: 1 };
-}
-
-// 🎯 FIRST MESSAGE
-if (userState[from].step === 1) {
-  userState[from].step = 2;
-
-  await sendButtons(from);
-}
-      // 🛍️ PRODUCT SELECTED
-      else if (type === "order") {
-        userState[from].step = 3;
-
+      if (id === "current_product") {
         await sendMessage(
           from,
-          "Awesome 😍\n\nPlease send your full delivery address with pincode 📦"
+          "Please select size, color & quantity from product 🛍️"
         );
       }
 
-      // 📦 ADDRESS
-      else if (type === "text" && userState[from].step === 3) {
-        userState[from].step = 4;
-
-        await sendMessage(
-          from,
-          "✅ Almost done!\n\n💳 UPI ID: pkt800@upi\n\nPlease complete payment and send screenshot 📸"
-        );
+      if (id === "view_catalog") {
+        await sendCatalog(from);
       }
 
-      // 📸 PAYMENT
-      else if (type === "image") {
-        userState[from].step = 5;
+      return res.sendStatus(200);
+    }
 
-        await sendMessage(
-          from,
-          "🎉 Payment received!\n\nYour order is confirmed ✅\nWe will ship soon 🚚"
-        );
-      }
+    // 🎯 FIRST MESSAGE (ALWAYS TRIGGER)
+    if (userState[from].step === 1) {
+      userState[from].step = 2;
+
+      await sendList(from);
+
+      return res.sendStatus(200);
+    }
+
+    // 🛍️ PRODUCT SELECTED
+    if (type === "order") {
+      userState[from].step = 3;
+
+      await sendMessage(
+        from,
+        "Awesome 😍\n\nPlease send your delivery address with pincode 📦"
+      );
+
+      return res.sendStatus(200);
+    }
+
+    // 📦 ADDRESS
+    if (type === "text" && userState[from].step === 3) {
+      userState[from].step = 4;
+
+      await sendMessage(
+        from,
+        "✅ Almost done!\n\n💳 UPI ID: pktambe@upi\n\nSend payment screenshot 📸"
+      );
+
+      return res.sendStatus(200);
+    }
+
+    // 📸 PAYMENT
+    if (type === "image") {
+      userState[from].step = 5;
+
+      await sendMessage(
+        from,
+        "🎉 Payment received!\n\nOrder confirmed ✅"
+      );
+
+      return res.sendStatus(200);
     }
 
     res.sendStatus(200);
   } catch (error) {
-    console.error(error.response?.data || error.message);
+    console.error("ERROR:", error.response?.data || error.message);
     res.sendStatus(500);
   }
 });
 
-// 📤 Send message function
-async function sendButtons(to) {
+// 📤 TEXT MESSAGE
+async function sendMessage(to, text) {
   await axios.post(
     "https://graph.facebook.com/v18.0/973822219157793/messages",
     {
       messaging_product: "whatsapp",
-      to: to,
+      to,
+      type: "text",
+      text: { body: text }
+    },
+    {
+      headers: {
+        Authorization: "EAALcQJ0mJBABRCNyxZCnDhD2tZCZCLCulcplPvWbZAgF0hSQq1gDAmNLgmv2ymF6ODhDaes4QZBf16shW4LhNFlLIQDpZA77IvUbEBcGHZAVDGUYnuahnnhLxVlxojCnp22w0ZCKtZCkDZBQiM3v3pJ6ZBYEMq8uZCv385WyQARJhKNa0UOrPzLZAiZBHoFwZBSgh0ieIc8KuF5tn0psvxvccPRquMpW5Ulf3hOkMrcZAWebqZCEFiigvcjpQxIF9VXRwmxQkLsxgB8kBcpPbyQIhSmaZBh3VXwE0T",
+        "Content-Type": "application/json"
+      }
+    }
+  );
+}
+
+// 📋 LIST MENU (YOUR UI)
+async function sendList(to) {
+  await axios.post(
+    "https://graph.facebook.com/v18.0/973822219157793/messages",
+    {
+      messaging_product: "whatsapp",
+      to,
       type: "interactive",
       interactive: {
         type: "list",
@@ -129,13 +154,11 @@ async function sendButtons(to) {
               rows: [
                 {
                   id: "current_product",
-                  title: "View This Product",
-                  description: "See selected product"
+                  title: "View This Product"
                 },
                 {
                   id: "view_catalog",
-                  title: "View Catalogue",
-                  description: "Browse all products"
+                  title: "View Catalogue"
                 }
               ]
             }
@@ -145,40 +168,49 @@ async function sendButtons(to) {
     },
     {
       headers: {
-        Authorization: "Bearer EAALcQJ0mJBABRCNyxZCnDhD2tZCZCLCulcplPvWbZAgF0hSQq1gDAmNLgmv2ymF6ODhDaes4QZBf16shW4LhNFlLIQDpZA77IvUbEBcGHZAVDGUYnuahnnhLxVlxojCnp22w0ZCKtZCkDZBQiM3v3pJ6ZBYEMq8uZCv385WyQARJhKNa0UOrPzLZAiZBHoFwZBSgh0ieIc8KuF5tn0psvxvccPRquMpW5Ulf3hOkMrcZAWebqZCEFiigvcjpQxIF9VXRwmxQkLsxgB8kBcpPbyQIhSmaZBh3VXwE0T",
+        Authorization: "EAALcQJ0mJBABRCNyxZCnDhD2tZCZCLCulcplPvWbZAgF0hSQq1gDAmNLgmv2ymF6ODhDaes4QZBf16shW4LhNFlLIQDpZA77IvUbEBcGHZAVDGUYnuahnnhLxVlxojCnp22w0ZCKtZCkDZBQiM3v3pJ6ZBYEMq8uZCv385WyQARJhKNa0UOrPzLZAiZBHoFwZBSgh0ieIc8KuF5tn0psvxvccPRquMpW5Ulf3hOkMrcZAWebqZCEFiigvcjpQxIF9VXRwmxQkLsxgB8kBcpPbyQIhSmaZBh3VXwE0T",
         "Content-Type": "application/json"
       }
     }
   );
 }
+
+// 🛍️ PRODUCT LIST (WORKING METHOD)
 async function sendCatalog(to) {
   await axios.post(
     "https://graph.facebook.com/v18.0/973822219157793/messages",
     {
       messaging_product: "whatsapp",
-      to: to,
+      to,
       type: "interactive",
       interactive: {
-        type: "catalog_message",
+        type: "product_list",
         body: {
-          text: "Browse our full collection 🛍️"
+          text: "🛍️ Our Products"
         },
         action: {
-          name: "catalog_message",
-          parameters: {
-            catalog_id: "1427937995741072"
-          }
+          catalog_id: "1427937995741072",
+          sections: [
+            {
+              title: "Best Sellers",
+              product_items: [
+                { product_retailer_id: "7011-Wine-9" },
+                { product_retailer_id: "7011-Green-9" }
+              ]
+            }
+          ]
         }
       }
     },
     {
       headers: {
-        Authorization: "Bearer EAALcQJ0mJBABRCNyxZCnDhD2tZCZCLCulcplPvWbZAgF0hSQq1gDAmNLgmv2ymF6ODhDaes4QZBf16shW4LhNFlLIQDpZA77IvUbEBcGHZAVDGUYnuahnnhLxVlxojCnp22w0ZCKtZCkDZBQiM3v3pJ6ZBYEMq8uZCv385WyQARJhKNa0UOrPzLZAiZBHoFwZBSgh0ieIc8KuF5tn0psvxvccPRquMpW5Ulf3hOkMrcZAWebqZCEFiigvcjpQxIF9VXRwmxQkLsxgB8kBcpPbyQIhSmaZBh3VXwE0T",
+        Authorization: "EAALcQJ0mJBABRCNyxZCnDhD2tZCZCLCulcplPvWbZAgF0hSQq1gDAmNLgmv2ymF6ODhDaes4QZBf16shW4LhNFlLIQDpZA77IvUbEBcGHZAVDGUYnuahnnhLxVlxojCnp22w0ZCKtZCkDZBQiM3v3pJ6ZBYEMq8uZCv385WyQARJhKNa0UOrPzLZAiZBHoFwZBSgh0ieIc8KuF5tn0psvxvccPRquMpW5Ulf3hOkMrcZAWebqZCEFiigvcjpQxIF9VXRwmxQkLsxgB8kBcpPbyQIhSmaZBh3VXwE0T",
         "Content-Type": "application/json"
       }
     }
   );
 }
-// 🚀 Start server
+
+// 🚀 START SERVER
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("Server running"));
