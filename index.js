@@ -120,7 +120,7 @@ async function sendButtons(to) {
           text: "🛍️ Browse our collection"
         },
         action: {
-          catalog_id: "xxxx41072",
+          catalog_id: "1427937995741072",
           sections: [
             {
               title: "Our Products",
