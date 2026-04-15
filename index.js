@@ -49,10 +49,7 @@ app.post("/webhook", async (req, res) => {
       console.log("Clicked:", id);
 
       if (id === "current_product") {
-        await sendMessage(
-          from,
-          "Please select size, color & quantity from product 🛍️"
-        );
+        await sendProduct(from);
       }
 
       if (id === "view_catalog") {
