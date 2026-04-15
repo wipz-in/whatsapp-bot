@@ -115,25 +115,23 @@ async function sendButtons(to) {
       to: to,
       type: "interactive",
       interactive: {
-        type: "button",
+        type: "product_list",
         body: {
-          text: "😍 Here’s the product you selected!\n\nWhat would you like to do next?"
+          text: "🛍️ Browse our collection"
         },
         action: {
-          buttons: [
+          catalog_id: "xxxx41072",
+          sections: [
             {
-              type: "reply",
-              reply: {
-                id: "current_product",
-                title: "View This Product"
-              }
-            },
-            {
-              type: "reply",
-              reply: {
-                id: "view_catalog",
-                title: "View Catalogue"
-              }
+              title: "Our Products",
+              product_items: [
+                {
+                  product_retailer_id: "7011-Wine-9"
+                },
+                {
+                  product_retailer_id: "7011-Green-8"
+                }
+              ]
             }
           ]
         }
