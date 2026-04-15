@@ -39,22 +39,21 @@ app.post("/webhook", async (req, res) => {
 
       // 🔘 BUTTON CLICK HANDLING
       else if (type === "interactive") {
-        const buttonId = message.interactive.button_reply.id;
+  const buttonId = message.interactive?.button_reply?.id;
 
-        // 🟢 View Product
-        if (buttonId === "current_product") {
-          await sendMessage(
-            from,
-            "Please select your size, color and quantity from the product page 🛍️"
-          );
-        }
+  console.log("Button clicked:", buttonId);
 
-        // 🟢 View Catalogue
-        else if (buttonId === "view_catalog") {
-          await sendCatalog(from);
-        }
-      }
+  if (buttonId === "current_product") {
+    await sendMessage(
+      from,
+      "Please select your size, color and quantity from the product page 🛍️"
+    );
+  }
 
+  else if (buttonId === "view_catalog") {
+    await sendCatalog(from);
+  }
+}
       // 🛍️ PRODUCT SELECTED
       else if (type === "order") {
         userState[from].step = 3;
@@ -136,7 +135,7 @@ async function sendButtons(to) {
 }
 async function sendCatalog(to) {
   await axios.post(
-    "https://graph.facebook.com/v18.0/YOUR_PHONE_NUMBER_ID/messages",
+    "https://graph.facebook.com/v18.0/973822219157793/messages",
     {
       messaging_product: "whatsapp",
       to: to,
@@ -156,7 +155,7 @@ async function sendCatalog(to) {
     },
     {
       headers: {
-        Authorization: "Bearer YOUR_ACCESS_TOKEN",
+        Authorization: "Bearer EAALcQJ0mJBABRNYrxjwYjamxvKIff0y5tYOg0UR8BFP4uMAvCKILLzLB80tGn8WTKcgBZBbL9BnNyZA6SE5Wts93HzSe8fl6EkFhdZBPYrXRgtaeBZAjUYPGqlWDtZCinXtClGrVTtELTcrZAv2Gn6eTFEGU17lFW6tltEwV0pfZCo45ZCMfnoYqXBnZAZBJOjHAqGGpS6YINTqvd86v3bEecp3SpWNEDvHaGMJUDpXGoQPnj3oJZCO2P3MpNPu1cVoJlhgGhMOLfKS4dJ48onH7UMo9ibn",
         "Content-Type": "application/json"
       }
     }
