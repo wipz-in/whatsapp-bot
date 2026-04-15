@@ -117,21 +117,25 @@ async function sendButtons(to) {
       to: to,
       type: "interactive",
       interactive: {
-        type: "product_list",
+        type: "list",
         body: {
-          text: "🛍️ Browse our collection"
+          text: "😍 Here’s the product you selected!\n\nChoose an option:"
         },
         action: {
-          catalog_id: "1427937995741072",
+          button: "Select Option",
           sections: [
             {
-              title: "Our Products",
-              product_items: [
+              title: "Product Options",
+              rows: [
                 {
-                  product_retailer_id: "7011-Wine-9"
+                  id: "current_product",
+                  title: "View This Product",
+                  description: "See selected product"
                 },
                 {
-                  product_retailer_id: "7011-Green-8"
+                  id: "view_catalog",
+                  title: "View Catalogue",
+                  description: "Browse all products"
                 }
               ]
             }
