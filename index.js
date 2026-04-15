@@ -31,11 +31,13 @@ app.post("/webhook", async (req, res) => {
       }
 
       // 🎯 FIRST MESSAGE (from ad)
-      if (userState[from].step === 1) {
-        userState[from].step = 2;
+      if (!userState[from] || userState[from].step === 1) {
+  userState[from] = { step: 2 };
 
-        await sendButtons(from);
-      }
+  await sendList(from); // or sendButtons()
+
+  return res.sendStatus(200);
+}
 
       // 🔘 BUTTON CLICK HANDLING
 if (type === "interactive") {
