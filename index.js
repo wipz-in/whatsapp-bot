@@ -38,7 +38,7 @@ app.post("/webhook", async (req, res) => {
       }
 
       // 🔘 BUTTON CLICK HANDLING
-      else if (type === "interactive") {
+if (type === "interactive") {
   const buttonId = message.interactive?.button_reply?.id;
 
   console.log("Button clicked:", buttonId);
@@ -53,6 +53,20 @@ app.post("/webhook", async (req, res) => {
   else if (buttonId === "view_catalog") {
     await sendCatalog(from);
   }
+
+  return res.sendStatus(200); // ⛔ IMPORTANT STOP HERE
+}
+
+// 🧠 INIT USER
+if (!userState[from]) {
+  userState[from] = { step: 1 };
+}
+
+// 🎯 FIRST MESSAGE
+if (userState[from].step === 1) {
+  userState[from].step = 2;
+
+  await sendButtons(from);
 }
       // 🛍️ PRODUCT SELECTED
       else if (type === "order") {
