@@ -191,8 +191,8 @@ async function sendCatalog(to) {
             {
               title: "Best Sellers",
               product_items: [
-                { product_retailer_id: "7011-Wine-9" },
-                { product_retailer_id: "7011-Green-9" }
+                { product_retailer_id: "zv4ny1m0a4" },
+                { product_retailer_id: "zv4ny1m0a4" }
               ]
             }
           ]
