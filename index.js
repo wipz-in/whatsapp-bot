@@ -126,7 +126,7 @@ async function sendMessage(to, text) {
     },
     {
       headers: {
-        Authorization: "EAALcQJ0mJBABRCNyxZCnDhD2tZCZCLCulcplPvWbZAgF0hSQq1gDAmNLgmv2ymF6ODhDaes4QZBf16shW4LhNFlLIQDpZA77IvUbEBcGHZAVDGUYnuahnnhLxVlxojCnp22w0ZCKtZCkDZBQiM3v3pJ6ZBYEMq8uZCv385WyQARJhKNa0UOrPzLZAiZBHoFwZBSgh0ieIc8KuF5tn0psvxvccPRquMpW5Ulf3hOkMrcZAWebqZCEFiigvcjpQxIF9VXRwmxQkLsxgB8kBcpPbyQIhSmaZBh3VXwE0T",
+        Authorization: "Bearer EAALcQJ0mJBABRA4mVrD0QMcEyFk0QfQR38Pr45hZAOfAaB9CyIEwDZAFpRT2ZAZCprU35JpLotAABbGQBgF0Jc2RqoMdwbmNzYk0XcQynQBGw3eJhOeTvZBcAGpB0EskJ6SjxJh6tWHI4tIFx30BxEoN4N72KYBcZCKUd8DfO3ShHGYjITj6DLgqeelDPoXO1jHZCYShptnj6kxzWZCB4Ahj0Icl4mFGWtZB6R2aekaue11cM85ZAaVFeCSl99Ub43HBROfPnIIihWEuZBCJcIlM0iyGWeW",
         "Content-Type": "application/json"
       }
     }
@@ -168,7 +168,7 @@ async function sendList(to) {
     },
     {
       headers: {
-        Authorization: "EAALcQJ0mJBABRCNyxZCnDhD2tZCZCLCulcplPvWbZAgF0hSQq1gDAmNLgmv2ymF6ODhDaes4QZBf16shW4LhNFlLIQDpZA77IvUbEBcGHZAVDGUYnuahnnhLxVlxojCnp22w0ZCKtZCkDZBQiM3v3pJ6ZBYEMq8uZCv385WyQARJhKNa0UOrPzLZAiZBHoFwZBSgh0ieIc8KuF5tn0psvxvccPRquMpW5Ulf3hOkMrcZAWebqZCEFiigvcjpQxIF9VXRwmxQkLsxgB8kBcpPbyQIhSmaZBh3VXwE0T",
+        Authorization: "Bearer EAALcQJ0mJBABRA4mVrD0QMcEyFk0QfQR38Pr45hZAOfAaB9CyIEwDZAFpRT2ZAZCprU35JpLotAABbGQBgF0Jc2RqoMdwbmNzYk0XcQynQBGw3eJhOeTvZBcAGpB0EskJ6SjxJh6tWHI4tIFx30BxEoN4N72KYBcZCKUd8DfO3ShHGYjITj6DLgqeelDPoXO1jHZCYShptnj6kxzWZCB4Ahj0Icl4mFGWtZB6R2aekaue11cM85ZAaVFeCSl99Ub43HBROfPnIIihWEuZBCJcIlM0iyGWeW",
         "Content-Type": "application/json"
       }
     }
@@ -204,7 +204,7 @@ async function sendCatalog(to) {
     },
     {
       headers: {
-        Authorization: "EAALcQJ0mJBABRCNyxZCnDhD2tZCZCLCulcplPvWbZAgF0hSQq1gDAmNLgmv2ymF6ODhDaes4QZBf16shW4LhNFlLIQDpZA77IvUbEBcGHZAVDGUYnuahnnhLxVlxojCnp22w0ZCKtZCkDZBQiM3v3pJ6ZBYEMq8uZCv385WyQARJhKNa0UOrPzLZAiZBHoFwZBSgh0ieIc8KuF5tn0psvxvccPRquMpW5Ulf3hOkMrcZAWebqZCEFiigvcjpQxIF9VXRwmxQkLsxgB8kBcpPbyQIhSmaZBh3VXwE0T",
+        Authorization: "Bearer EAALcQJ0mJBABRA4mVrD0QMcEyFk0QfQR38Pr45hZAOfAaB9CyIEwDZAFpRT2ZAZCprU35JpLotAABbGQBgF0Jc2RqoMdwbmNzYk0XcQynQBGw3eJhOeTvZBcAGpB0EskJ6SjxJh6tWHI4tIFx30BxEoN4N72KYBcZCKUd8DfO3ShHGYjITj6DLgqeelDPoXO1jHZCYShptnj6kxzWZCB4Ahj0Icl4mFGWtZB6R2aekaue11cM85ZAaVFeCSl99Ub43HBROfPnIIihWEuZBCJcIlM0iyGWeW",
         "Content-Type": "application/json"
       }
     }
