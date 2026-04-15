@@ -12,19 +12,6 @@ const VERIFY_TOKEN = "my_verify_token";
 const userState = {};
 
 // ✅ Webhook verification (DO NOT CHANGE)
-app.get("/webhook", (req, res) => {
-  const mode = req.query["hub.mode"];
-  const token = req.query["hub.verify_token"];
-  const challenge = req.query["hub.challenge"];
-
-  if (mode && token === VERIFY_TOKEN) {
-    return res.status(200).send(challenge);
-  } else {
-    return res.sendStatus(403);
-  }
-});
-
-// 🤖 MAIN BOT LOGIC
 app.post("/webhook", async (req, res) => {
   try {
     const entry = req.body.entry?.[0];
@@ -38,14 +25,39 @@ app.post("/webhook", async (req, res) => {
 
       console.log("Incoming:", JSON.stringify(message, null, 2));
 
-      // 🧠 Initialize user state
+      // INIT USER
       if (!userState[from]) {
         userState[from] = { step: 1 };
       }
 
-      // 🛍️ PRODUCT SELECTED (from catalogue)
-      if (type === "order") {
+      // 🎯 FIRST MESSAGE (from ad)
+      if (userState[from].step === 1) {
         userState[from].step = 2;
+
+        await sendButtons(from);
+      }
+
+      // 🔘 BUTTON CLICK HANDLING
+      else if (type === "interactive") {
+        const buttonId = message.interactive.button_reply.id;
+
+        // 🟢 View Product
+        if (buttonId === "current_product") {
+          await sendMessage(
+            from,
+            "Please select your size, color and quantity from the product page 🛍️"
+          );
+        }
+
+        // 🟢 View Catalogue
+        else if (buttonId === "view_catalog") {
+          await sendCatalog(from);
+        }
+      }
+
+      // 🛍️ PRODUCT SELECTED
+      else if (type === "order") {
+        userState[from].step = 3;
 
         await sendMessage(
           from,
@@ -53,34 +65,19 @@ app.post("/webhook", async (req, res) => {
         );
       }
 
-      // 📝 TEXT MESSAGE
-      else if (type === "text") {
-        const text = message.text.body;
+      // 📦 ADDRESS
+      else if (type === "text" && userState[from].step === 3) {
+        userState[from].step = 4;
 
-        // Step 1 → Welcome
-        if (userState[from].step === 1) {
-          userState[from].step = 2;
-
-          await sendMessage(
-            from,
-            "Hi 👋 Welcome!\n\n🛍️ Please select a product from catalogue.\n\nOnce done, send your delivery address 📦"
-          );
-        }
-
-        // Step 2 → Address received
-        else if (userState[from].step === 2) {
-          userState[from].step = 3;
-
-          await sendMessage(
-            from,
-            "✅ Almost done!\n\n💳 UPI ID: pktambe@upi\n\nPlease complete payment and send screenshot (Including transaction ID) 📸"
-          );
-        }
+        await sendMessage(
+          from,
+          "✅ Almost done!\n\n💳 UPI ID: pkt800@upi\n\nPlease complete payment and send screenshot 📸"
+        );
       }
 
-      // 📸 PAYMENT SCREENSHOT
+      // 📸 PAYMENT
       else if (type === "image") {
-        userState[from].step = 4;
+        userState[from].step = 5;
 
         await sendMessage(
           from,
@@ -97,14 +94,37 @@ app.post("/webhook", async (req, res) => {
 });
 
 // 📤 Send message function
-async function sendMessage(to, text) {
+async function sendButtons(to) {
   await axios.post(
     "https://graph.facebook.com/v18.0/973822219157793/messages",
     {
       messaging_product: "whatsapp",
       to: to,
-      type: "text",
-      text: { body: text }
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: {
+          text: "😍 Here’s the product you selected!\n\nWhat would you like to do next?"
+        },
+        action: {
+          buttons: [
+            {
+              type: "reply",
+              reply: {
+                id: "current_product",
+                title: "View This Product"
+              }
+            },
+            {
+              type: "reply",
+              reply: {
+                id: "view_catalog",
+                title: "View Catalogue"
+              }
+            }
+          ]
+        }
+      }
     },
     {
       headers: {
@@ -114,7 +134,34 @@ async function sendMessage(to, text) {
     }
   );
 }
-
+async function sendCatalog(to) {
+  await axios.post(
+    "https://graph.facebook.com/v18.0/YOUR_PHONE_NUMBER_ID/messages",
+    {
+      messaging_product: "whatsapp",
+      to: to,
+      type: "interactive",
+      interactive: {
+        type: "catalog_message",
+        body: {
+          text: "Browse our full collection 🛍️"
+        },
+        action: {
+          name: "catalog_message",
+          parameters: {
+            catalog_id: "1427937995741072"
+          }
+        }
+      }
+    },
+    {
+      headers: {
+        Authorization: "Bearer YOUR_ACCESS_TOKEN",
+        "Content-Type": "application/json"
+      }
+    }
+  );
+}
 // 🚀 Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("Server running"));
