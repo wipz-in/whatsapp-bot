@@ -112,9 +112,12 @@ app.post("/webhook", async (req, res) => {
   userOrders[from].status = "payment_sent";
 
   userState[from].step = "done";
+      const orderId = "ORD" + Date.now();
+userOrders[from].orderId = orderId;
 
   // ✅ SAVE TO GOOGLE SHEET
   await saveOrder({
+    orderId: orderId,
     phone: from,
     product: userOrders[from].name,
     price: userOrders[from].price,
@@ -125,7 +128,7 @@ app.post("/webhook", async (req, res) => {
 
   await sendMessage(
     from,
-    "✅ Thank you for the payment!\n\n🧾 Order ID: ${orderId}\n\nWe will confirm order shortly 🚚"
+    `✅ Thank you for the payment!\n\n🧾 Order ID: ${orderId}\n\nWe will confirm order shortly 🚚`
   );
 
   return res.sendStatus(200);
@@ -205,15 +208,15 @@ async function sendMessage(to, text) {
 
 async function saveOrder(data) {
   try {
-    const orderId = "ORD" + Date.now();
+    data.orderId;
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEET_ID,
-      range: "Sheet1!A:H",
+      range: "Sheet1",
       valueInputOption: "USER_ENTERED",
       requestBody: {
         values: [
           [
-            orderId,
+            data.orderId,
             new Date().toLocaleString(),
             data.phone,
             data.product,
