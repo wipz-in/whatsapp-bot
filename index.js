@@ -7,10 +7,11 @@ app.use(bodyParser.json());
 
 const VERIFY_TOKEN = "my_verify_token";
 
-// simple memory
+// memory
 const userState = {};
+const userOrders = {};
 
-// ✅ WEBHOOK VERIFY (KEEP)
+// VERIFY
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
@@ -23,11 +24,10 @@ app.get("/webhook", (req, res) => {
   }
 });
 
-// ✅ MAIN BOT
+// MAIN
 app.post("/webhook", async (req, res) => {
   try {
     const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
-
     if (!message) return res.sendStatus(200);
 
     const from = message.from;
@@ -35,83 +35,83 @@ app.post("/webhook", async (req, res) => {
 
     console.log("Incoming:", JSON.stringify(message, null, 2));
 
-    // 🧠 INIT USER
+    // INIT
     if (!userState[from]) {
       userState[from] = { step: 1 };
     }
 
-    // 🔘 BUTTON / LIST CLICK (FIRST PRIORITY)
-    if (type === "interactive") {
-      const id =
-        message.interactive?.button_reply?.id ||
-        message.interactive?.list_reply?.id;
+    // 🛍️ ORDER FROM CATALOG
+    if (type === "order") {
+      const product = message.order?.product_items?.[0];
 
-      console.log("Clicked:", id);
+      const price = product?.item_price || 0;
+      const name = product?.product_retailer_id;
 
-      if (id === "current_product") {
-        await sendProduct(from);
-      }
+      userOrders[from] = { price, name };
 
-      if (id === "view_catalog") {
-        await sendCatalog(from);
-      }
+      // 👉 Trigger Flow later (for now simple message)
+      await sendMessage(
+        from,
+        "Great choice 😍\n\nNow please fill your delivery details 👇"
+      );
 
-      return res.sendStatus(200);
-    }
+      // (Next step: Flow trigger)
 
-    // 🎯 FIRST MESSAGE (ALWAYS TRIGGER)
-    if (userState[from].step === 1) {
       userState[from].step = 2;
 
-      await sendList(from);
-
       return res.sendStatus(200);
     }
 
-    // 🛍️ PRODUCT SELECTED
-    if (type === "order") {
+    // 📦 ADDRESS (temporary text until Flow added)
+    if (type === "text" && userState[from].step === 2) {
+      const address = message.text.body;
+
+      userOrders[from].address = address;
+
+      const amount = userOrders[from].price;
+
+      const upiLink = `upi://pay?pa=pktambe@upi&pn=Wipz&am=${amount}`;
+
+      await sendMessage(
+        from,
+        `💳 Pay here:\n${upiLink}\n\nAfter payment, send screenshot + UTR`
+      );
+
       userState[from].step = 3;
-
-      await sendMessage(
-        from,
-        "Awesome 😍\n\nPlease send your delivery address with pincode 📦"
-      );
-
-      return res.sendStatus(200);
-    }
-
-    // 📦 ADDRESS
-    if (type === "text" && userState[from].step === 3) {
-      userState[from].step = 4;
-
-      await sendMessage(
-        from,
-        "✅ Almost done!\n\n💳 UPI ID: pktambe@upi\n\nSend payment screenshot 📸"
-      );
 
       return res.sendStatus(200);
     }
 
     // 📸 PAYMENT
     if (type === "image") {
-      userState[from].step = 5;
+      await sendMessage(
+        from,
+        "✅ Payment received!\n\nWe will verify and confirm your order 🚚"
+      );
+
+      return res.sendStatus(200);
+    }
+
+    // 🎯 FIRST MESSAGE
+    if (userState[from].step === 1) {
+      userState[from].step = 99;
 
       await sendMessage(
         from,
-        "🎉 Payment received!\n\nOrder confirmed ✅"
+        "😍 Welcome!\n\n🛍️ Tap 'View Catalogue' at top 👆\nSelect your product, then continue here"
       );
 
       return res.sendStatus(200);
     }
 
     res.sendStatus(200);
-  } catch (error) {
-    console.error("ERROR:", error.response?.data || error.message);
+  } catch (err) {
+    console.error(err.response?.data || err.message);
     res.sendStatus(500);
   }
 });
 
-// 📤 TEXT MESSAGE
+// SEND TEXT
 async function sendMessage(to, text) {
   await axios.post(
     "https://graph.facebook.com/v25.0/973822219157793/messages",
@@ -130,84 +130,4 @@ async function sendMessage(to, text) {
   );
 }
 
-// 📋 LIST MENU (YOUR UI)
-async function sendList(to) {
-  await axios.post(
-    "https://graph.facebook.com/v25.0/973822219157793/messages",
-    {
-      messaging_product: "whatsapp",
-      to,
-      type: "interactive",
-      interactive: {
-        type: "list",
-        body: {
-          text: "😍 Here’s the product you selected!\n\nChoose an option:"
-        },
-        action: {
-          button: "Select Option",
-          sections: [
-            {
-              title: "Product Options",
-              rows: [
-                {
-                  id: "current_product",
-                  title: "View This Product"
-                },
-                {
-                  id: "view_catalog",
-                  title: "View Catalogue"
-                }
-              ]
-            }
-          ]
-        }
-      }
-    },
-    {
-      headers: {
-        Authorization: "Bearer EAALcQJ0mJBABRFZA3HFXWNQLnsMakmbZAbghFNLfvZCdn1wBIw0eDvZCTEM5z6i2heFr0INFNfBqIDuFdb8Pi8R5OzEFPea3RPf1IQnWHlJkg5FFLpyIDa7Kv5ez39SrgN5AGKZASspjK5N0FFCNzl05MZBQA3FdxqTXYyXLv6zYI0HSyE5HGkmd9jW7TFZBpBCZB33dndDeKaHFpHa7WfhhfXfvqUdTKat1gZBJpnzXGeenEyATAtgZCqh9njxxIBMcgSbnp5BfBoqW4m2E5jJZAUPsVHO",
-        "Content-Type": "application/json"
-      }
-    }
-  );
-}
-
-// 🛍️ PRODUCT LIST (WORKING METHOD)
-async function sendCatalog(to) {
-  await axios.post(
-    "https://graph.facebook.com/v25.0/973822219157793/messages",
-    {
-      messaging_product: "whatsapp",
-      to,
-      type: "interactive",
-      interactive: {
-        type: "product_list",
-        body: {
-          text: "🛍️ Our Products"
-        },
-        action: {
-          catalog_id: "1427937995741072",
-          sections: [
-            {
-              title: "Best Sellers",
-              product_items: [
-                { product_retailer_id: "7011-Green-5" },
-                { product_retailer_id: "7012-Wine-5" }
-              ]
-            }
-          ]
-        }
-      }
-    },
-    {
-      headers: {
-        Authorization: "Bearer EAALcQJ0mJBABRFZA3HFXWNQLnsMakmbZAbghFNLfvZCdn1wBIw0eDvZCTEM5z6i2heFr0INFNfBqIDuFdb8Pi8R5OzEFPea3RPf1IQnWHlJkg5FFLpyIDa7Kv5ez39SrgN5AGKZASspjK5N0FFCNzl05MZBQA3FdxqTXYyXLv6zYI0HSyE5HGkmd9jW7TFZBpBCZB33dndDeKaHFpHa7WfhhfXfvqUdTKat1gZBJpnzXGeenEyATAtgZCqh9njxxIBMcgSbnp5BfBoqW4m2E5jJZAUPsVHO",
-        "Content-Type": "application/json"
-      }
-    }
-  );
-}
-
-// 🚀 START SERVER
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Server running"));
+app.listen(3000, () => console.log("Server running"));
