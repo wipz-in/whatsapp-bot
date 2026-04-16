@@ -109,13 +109,16 @@ app.post("/webhook", async (req, res) => {
     // 📸 PAYMENT SCREENSHOT
     // =========================
     if (type === "image" && userState[from].step === "payment") {
-      const mediaId = message.image.id;
+  const mediaId = message.image.id;
+  const imageUrl = await getMediaUrl(mediaId); // ✅ ADD THIS
+
   userOrders[from].status = "payment_sent";
-      console.log("Image ID:", mediaId);
+  console.log("Image ID:", mediaId);
 
   userState[from].step = "done";
-      const orderId = "ORD" + Date.now();
-userOrders[from].orderId = orderId;
+
+  const orderId = "ORD" + Date.now();
+  userOrders[from].orderId = orderId;
 
   // ✅ SAVE TO GOOGLE SHEET
   await saveOrder({
@@ -125,6 +128,7 @@ userOrders[from].orderId = orderId;
     price: userOrders[from].price,
     address: userOrders[from].address,
     status: "Paid (pending verification)",
+    screenshot: imageUrl,
     raw: JSON.stringify(userOrders[from])
   });
 
@@ -255,6 +259,7 @@ async function saveOrder(data) {
             data.price,
             data.address,
             data.status,
+            data.screenshot,
             data.raw
           ]
         ]
