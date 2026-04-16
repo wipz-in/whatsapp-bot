@@ -109,7 +109,9 @@ app.post("/webhook", async (req, res) => {
     // 📸 PAYMENT SCREENSHOT
     // =========================
     if (type === "image" && userState[from].step === "payment") {
+      const mediaId = message.image.id;
   userOrders[from].status = "payment_sent";
+      console.log("Image ID:", mediaId);
 
   userState[from].step = "done";
       const orderId = "ORD" + Date.now();
