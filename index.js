@@ -1,6 +1,16 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const axios = require("axios");
+const { google } = require("googleapis");
+
+const auth = new google.auth.GoogleAuth({
+  credentials: JSON.parse(process.env.GOOGLE_CREDENTIALS),
+  scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+});
+
+const sheets = google.sheets({ version: "v4", auth });
+
+const SHEET_ID = "1eC8M6-9OpGlZ0G9r64i__sWoSW3o0hzxUp97Po4bJSk";
 
 const app = express();
 app.use(bodyParser.json());
@@ -99,17 +109,27 @@ app.post("/webhook", async (req, res) => {
     // 📸 PAYMENT SCREENSHOT
     // =========================
     if (type === "image" && userState[from].step === "payment") {
-      userOrders[from].status = "payment_sent";
+  userOrders[from].status = "payment_sent";
 
-      userState[from].step = "done";
+  userState[from].step = "done";
 
-      await sendMessage(
-        from,
-        "✅ Payment received!\n\nWe will verify and confirm your order 🚚"
-      );
+  // ✅ SAVE TO GOOGLE SHEET
+  await saveOrder({
+    phone: from,
+    product: userOrders[from].name,
+    price: userOrders[from].price,
+    address: userOrders[from].address,
+    status: "Paid (pending verification)",
+    raw: JSON.stringify(userOrders[from])
+  });
 
-      return res.sendStatus(200);
-    }
+  await sendMessage(
+    from,
+    "✅ Payment received!\n\nWe will verify and confirm your order 🚚"
+  );
+
+  return res.sendStatus(200);
+}
 
     // =========================
     // 🤖 SMART FALLBACK
@@ -170,7 +190,7 @@ async function sendMessage(to, text) {
       },
       {
         headers: {
-          Authorization: `Bearer EAALcQJ0mJBABRByVcDZBKTeOZCFyGzxvDTTevZCcRbMD4BcEgKCxq6OqfPiaP3wk4IXgFuQo5e5rX4VW4EN9ziA1E68lyvLZB3eQVwU8tiPABZCtA1DnOVdiCj0X22ykVJiswnCxMvchEBMeOS29e22pw1bxwMtUwlx7luCBclZAD8D1m7HbWTr2HqHqqjy2kysoYstWmvZBb4AspywYLmgIXKNXZCCkzIT7nm8NNMJK38RCLWFGFALcIzaw0Hcm3Ns3zI5OSnVZBgSIdybfW7Knqe6Lo`,
+          Authorization: `Bearer EAALcQJ0mJBABRDtpwICff7DvFK6WbamUbOuRkqbpdRmxCfZCNWX3GBmWFRk09d6kiDZApIN5sMEbl7RPuRGcG5YKqLodUK9AQ3Q1ZBb67IHNSEYzYltwtlNpZCHO0zw58Kf226Yz1Ypsggz4AH71uX9knZAWTr9aGZB4h9pdapSobfgrZCsPL9tmsQQEJFy98koT49G1OIKw384tJlYZB8tymD7On6eoZA0EuEeePz8pzWpdIf76n11q62wntWNrbjR5XhjxbB1IAF6S2pj2ztXeOdYXZB`,
           "Content-Type": "application/json"
         }
       }
@@ -185,4 +205,30 @@ async function sendMessage(to, text) {
 // 🚀 START SERVER
 // =========================
 const PORT = process.env.PORT || 3000;
+async function saveOrder(data) {
+  try {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range: "Sheet1!A:G",
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: [
+          [
+            new Date().toLocaleString(),
+            data.phone,
+            data.product,
+            data.price,
+            data.address,
+            data.status,
+            data.raw
+          ]
+        ]
+      }
+    });
+
+    console.log("✅ Order saved to sheet");
+  } catch (err) {
+    console.error("❌ Sheet error:", err.message);
+  }
+}
 app.listen(PORT, () => console.log("Server running"));
