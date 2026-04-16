@@ -179,6 +179,23 @@ userOrders[from].orderId = orderId;
   }
 });
 
+async function getMediaUrl(mediaId) {
+  try {
+    const response = await axios.get(
+      `https://graph.facebook.com/v25.0/${mediaId}`,
+      {
+        headers: {
+          Authorization: `Bearer EAALcQJ0mJBABRMvW32I1xZAsN1QSFNgaEGsGDCijsTGiH6DU3skeGwVSCJQ3VeXyNyZAfZAeT9wBcW910tJUKZBW8bQHIHIhsWk1i3pcHciQtakk8fMobZBZCgZCZB3f9eVw63ahDpSZCQpxXjUo2VLrTheMV7ziiRARRVhZCdJmY8OnkdU5dguk6qw0ZBCnB0hJiZCehvF7Iix4Arw5WNpNdpFQzeLxmYuq511N3PkG9sFCe3ZBJjBtVYRjDsAYeslXJCahujQlZBnMSnnZA5HZBbbvJZBnvBePD`
+        }
+      }
+    );
+
+    return response.data.url;
+  } catch (error) {
+    console.error("Media URL error:", error.response?.data || error.message);
+    return null;
+  }
+}
 
 // =========================
 // 📤 SEND MESSAGE FUNCTION
@@ -195,7 +212,7 @@ async function sendMessage(to, text) {
       },
       {
         headers: {
-          Authorization: `Bearer EAALcQJ0mJBABRCwZASFE5J6ONuOGwOMxWI4LMRyzzQPjlsA4BFB6hIdVt4qt8chHNnPY3rkdFZBDFEDH7AVlYsKw5e0WZCgVHnUAzkXBcfTNHLwnLzhHV3DiTd0MZBfGL5fO0bEoY0tPQ1LAnA2bZCYlNdMwBXfutRCa4ACb5t1qelJ8sLx0slzTWoDFdjN1t0VSob92bqdEbMJjtoLStPZAdmjTfKIa8YIvAGS8CCAZAUrJcZBZCBjZCknX4ZBMYX28sdygx6k4DdqZAaoxzGAJx2UgXjLk`,
+          Authorization: `Bearer EAALcQJ0mJBABRMvW32I1xZAsN1QSFNgaEGsGDCijsTGiH6DU3skeGwVSCJQ3VeXyNyZAfZAeT9wBcW910tJUKZBW8bQHIHIhsWk1i3pcHciQtakk8fMobZBZCgZCZB3f9eVw63ahDpSZCQpxXjUo2VLrTheMV7ziiRARRVhZCdJmY8OnkdU5dguk6qw0ZBCnB0hJiZCehvF7Iix4Arw5WNpNdpFQzeLxmYuq511N3PkG9sFCe3ZBJjBtVYRjDsAYeslXJCahujQlZBnMSnnZA5HZBbbvJZBnvBePD`,
           "Content-Type": "application/json"
         }
       }
