@@ -190,7 +190,7 @@ async function sendMessage(to, text) {
       },
       {
         headers: {
-          Authorization: `Bearer EAALcQJ0mJBABRDtpwICff7DvFK6WbamUbOuRkqbpdRmxCfZCNWX3GBmWFRk09d6kiDZApIN5sMEbl7RPuRGcG5YKqLodUK9AQ3Q1ZBb67IHNSEYzYltwtlNpZCHO0zw58Kf226Yz1Ypsggz4AH71uX9knZAWTr9aGZB4h9pdapSobfgrZCsPL9tmsQQEJFy98koT49G1OIKw384tJlYZB8tymD7On6eoZA0EuEeePz8pzWpdIf76n11q62wntWNrbjR5XhjxbB1IAF6S2pj2ztXeOdYXZB`,
+          Authorization: `Bearer EAALcQJ0mJBABRFVNB71IAO6FZCtyv7wY0L9ZCLZCkZAkphka8RmAMbeERU7ZAdYjPTtO4fMCIfo81Ytdl3CtIZAaZAXZCVZCdN986vIB9LPohClkal1LiOjuTP9pUi1fEtqCrWdI7Ng5AbItjEvAjBLOmmNppL2Oo5ZBBg4CkaURbqc3iNV5GuKrXezsYuBIendalMgbedcJZBcPOdotRk2sIvvf4gVRikJkaD7A9nKGQI5ZAM6hXw6WyFvZCH0mg6wbYshDdHkqTdpmrElS7fuAXpfxRzZCTr`,
           "Content-Type": "application/json"
         }
       }
@@ -232,4 +232,6 @@ async function saveOrder(data) {
 // 🚀 START SERVER (ONLY HERE)
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => console.log("Server running"));
+app.listen(PORT, () => {
+  console.log("Server running on port", PORT);
+});
