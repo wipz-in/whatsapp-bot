@@ -114,7 +114,7 @@ app.post("/webhook", async (req, res) => {
 // 📤 TEXT MESSAGE
 async function sendMessage(to, text) {
   await axios.post(
-    "https://graph.facebook.com/v18.0/973822219157793/messages",
+    "https://graph.facebook.com/v25.0/973822219157793/messages",
     {
       messaging_product: "whatsapp",
       to,
@@ -123,7 +123,7 @@ async function sendMessage(to, text) {
     },
     {
       headers: {
-        Authorization: "Bearer EAALcQJ0mJBABRA4mVrD0QMcEyFk0QfQR38Pr45hZAOfAaB9CyIEwDZAFpRT2ZAZCprU35JpLotAABbGQBgF0Jc2RqoMdwbmNzYk0XcQynQBGw3eJhOeTvZBcAGpB0EskJ6SjxJh6tWHI4tIFx30BxEoN4N72KYBcZCKUd8DfO3ShHGYjITj6DLgqeelDPoXO1jHZCYShptnj6kxzWZCB4Ahj0Icl4mFGWtZB6R2aekaue11cM85ZAaVFeCSl99Ub43HBROfPnIIihWEuZBCJcIlM0iyGWeW",
+        Authorization: "Bearer EAALcQJ0mJBABRFZA3HFXWNQLnsMakmbZAbghFNLfvZCdn1wBIw0eDvZCTEM5z6i2heFr0INFNfBqIDuFdb8Pi8R5OzEFPea3RPf1IQnWHlJkg5FFLpyIDa7Kv5ez39SrgN5AGKZASspjK5N0FFCNzl05MZBQA3FdxqTXYyXLv6zYI0HSyE5HGkmd9jW7TFZBpBCZB33dndDeKaHFpHa7WfhhfXfvqUdTKat1gZBJpnzXGeenEyATAtgZCqh9njxxIBMcgSbnp5BfBoqW4m2E5jJZAUPsVHO",
         "Content-Type": "application/json"
       }
     }
@@ -133,7 +133,7 @@ async function sendMessage(to, text) {
 // 📋 LIST MENU (YOUR UI)
 async function sendList(to) {
   await axios.post(
-    "https://graph.facebook.com/v18.0/973822219157793/messages",
+    "https://graph.facebook.com/v25.0/973822219157793/messages",
     {
       messaging_product: "whatsapp",
       to,
@@ -165,7 +165,7 @@ async function sendList(to) {
     },
     {
       headers: {
-        Authorization: "Bearer EAALcQJ0mJBABRA4mVrD0QMcEyFk0QfQR38Pr45hZAOfAaB9CyIEwDZAFpRT2ZAZCprU35JpLotAABbGQBgF0Jc2RqoMdwbmNzYk0XcQynQBGw3eJhOeTvZBcAGpB0EskJ6SjxJh6tWHI4tIFx30BxEoN4N72KYBcZCKUd8DfO3ShHGYjITj6DLgqeelDPoXO1jHZCYShptnj6kxzWZCB4Ahj0Icl4mFGWtZB6R2aekaue11cM85ZAaVFeCSl99Ub43HBROfPnIIihWEuZBCJcIlM0iyGWeW",
+        Authorization: "Bearer EAALcQJ0mJBABRFZA3HFXWNQLnsMakmbZAbghFNLfvZCdn1wBIw0eDvZCTEM5z6i2heFr0INFNfBqIDuFdb8Pi8R5OzEFPea3RPf1IQnWHlJkg5FFLpyIDa7Kv5ez39SrgN5AGKZASspjK5N0FFCNzl05MZBQA3FdxqTXYyXLv6zYI0HSyE5HGkmd9jW7TFZBpBCZB33dndDeKaHFpHa7WfhhfXfvqUdTKat1gZBJpnzXGeenEyATAtgZCqh9njxxIBMcgSbnp5BfBoqW4m2E5jJZAUPsVHO",
         "Content-Type": "application/json"
       }
     }
@@ -175,7 +175,7 @@ async function sendList(to) {
 // 🛍️ PRODUCT LIST (WORKING METHOD)
 async function sendCatalog(to) {
   await axios.post(
-    "https://graph.facebook.com/v18.0/973822219157793/messages",
+    "https://graph.facebook.com/v25.0/973822219157793/messages",
     {
       messaging_product: "whatsapp",
       to,
@@ -191,8 +191,8 @@ async function sendCatalog(to) {
             {
               title: "Best Sellers",
               product_items: [
-                { product_retailer_id: "zv4ny1m0a4" },
-                { product_retailer_id: "zv4ny1m0a4" }
+                { product_retailer_id: "7011-Green-5" },
+                { product_retailer_id: "7012-Wine-5" }
               ]
             }
           ]
@@ -201,7 +201,7 @@ async function sendCatalog(to) {
     },
     {
       headers: {
-        Authorization: "Bearer EAALcQJ0mJBABRA4mVrD0QMcEyFk0QfQR38Pr45hZAOfAaB9CyIEwDZAFpRT2ZAZCprU35JpLotAABbGQBgF0Jc2RqoMdwbmNzYk0XcQynQBGw3eJhOeTvZBcAGpB0EskJ6SjxJh6tWHI4tIFx30BxEoN4N72KYBcZCKUd8DfO3ShHGYjITj6DLgqeelDPoXO1jHZCYShptnj6kxzWZCB4Ahj0Icl4mFGWtZB6R2aekaue11cM85ZAaVFeCSl99Ub43HBROfPnIIihWEuZBCJcIlM0iyGWeW",
+        Authorization: "Bearer EAALcQJ0mJBABRFZA3HFXWNQLnsMakmbZAbghFNLfvZCdn1wBIw0eDvZCTEM5z6i2heFr0INFNfBqIDuFdb8Pi8R5OzEFPea3RPf1IQnWHlJkg5FFLpyIDa7Kv5ez39SrgN5AGKZASspjK5N0FFCNzl05MZBQA3FdxqTXYyXLv6zYI0HSyE5HGkmd9jW7TFZBpBCZB33dndDeKaHFpHa7WfhhfXfvqUdTKat1gZBJpnzXGeenEyATAtgZCqh9njxxIBMcgSbnp5BfBoqW4m2E5jJZAUPsVHO",
         "Content-Type": "application/json"
       }
     }
