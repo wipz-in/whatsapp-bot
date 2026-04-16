@@ -193,7 +193,7 @@ async function sendMessage(to, text) {
       },
       {
         headers: {
-          Authorization: `Bearer EAALcQJ0mJBABRFVNB71IAO6FZCtyv7wY0L9ZCLZCkZAkphka8RmAMbeERU7ZAdYjPTtO4fMCIfo81Ytdl3CtIZAaZAXZCVZCdN986vIB9LPohClkal1LiOjuTP9pUi1fEtqCrWdI7Ng5AbItjEvAjBLOmmNppL2Oo5ZBBg4CkaURbqc3iNV5GuKrXezsYuBIendalMgbedcJZBcPOdotRk2sIvvf4gVRikJkaD7A9nKGQI5ZAM6hXw6WyFvZCH0mg6wbYshDdHkqTdpmrElS7fuAXpfxRzZCTr`,
+          Authorization: `Bearer EAALcQJ0mJBABRCwZASFE5J6ONuOGwOMxWI4LMRyzzQPjlsA4BFB6hIdVt4qt8chHNnPY3rkdFZBDFEDH7AVlYsKw5e0WZCgVHnUAzkXBcfTNHLwnLzhHV3DiTd0MZBfGL5fO0bEoY0tPQ1LAnA2bZCYlNdMwBXfutRCa4ACb5t1qelJ8sLx0slzTWoDFdjN1t0VSob92bqdEbMJjtoLStPZAdmjTfKIa8YIvAGS8CCAZAUrJcZBZCBjZCknX4ZBMYX28sdygx6k4DdqZAaoxzGAJx2UgXjLk`,
           "Content-Type": "application/json"
         }
       }
