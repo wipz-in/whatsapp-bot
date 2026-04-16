@@ -83,7 +83,7 @@ app.post("/webhook", async (req, res) => {
 
       const amount = userOrders[from].price || 0;
 
-      const upiLink = `upi://pay?pa=pkt800@upi&pn=Wipz&am=${amount}`;
+      const upiLink = `https://upi://pay?pa=pktambe@upi&pn=Wipz&am=${amount}`;
 
       userState[from].step = "payment";
 
@@ -170,7 +170,7 @@ async function sendMessage(to, text) {
       },
       {
         headers: {
-          Authorization: `Bearer EAALcQJ0mJBABRMDfZAThHKuHcjRAPWxiZADeYdllOrGNeRbxDF8USYEWfMgfEsHrmvSm0JEGlZBZCGqW3QA7dVA01fLqh3Atep4HIvMIhcAZB2GCFCBxyyNGpYYSylZAEDWwUmgCwmXfYxDrZAT0EZCz00WjdRd8ZANjYGXimD0bqeUQZC8IHVJ0KnnZC5QsrkqF1WCq2v8GGuZBbIPTKzZAjc4ZADs6k0ZBZAKYkLrO2YXaUBpyZARB1T5mRRgiKcGp81TdvVz9T3mmyA9NJwf0K39UaCaYGPlvEwwZDZD`,
+          Authorization: `Bearer EAALcQJ0mJBABRByVcDZBKTeOZCFyGzxvDTTevZCcRbMD4BcEgKCxq6OqfPiaP3wk4IXgFuQo5e5rX4VW4EN9ziA1E68lyvLZB3eQVwU8tiPABZCtA1DnOVdiCj0X22ykVJiswnCxMvchEBMeOS29e22pw1bxwMtUwlx7luCBclZAD8D1m7HbWTr2HqHqqjy2kysoYstWmvZBb4AspywYLmgIXKNXZCCkzIT7nm8NNMJK38RCLWFGFALcIzaw0Hcm3Ns3zI5OSnVZBgSIdybfW7Knqe6Lo`,
           "Content-Type": "application/json"
         }
       }
