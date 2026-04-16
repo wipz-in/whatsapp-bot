@@ -181,6 +181,7 @@ userOrders[from].orderId = orderId;
 
 async function getMediaUrl(mediaId) {
   try {
+    // Step 1: Get media info
     const response = await axios.get(
       `https://graph.facebook.com/v25.0/${mediaId}`,
       {
@@ -190,9 +191,21 @@ async function getMediaUrl(mediaId) {
       }
     );
 
-    return response.data.url;
+    const mediaUrl = response.data.url;
+
+    // Step 2: Get actual downloadable URL
+    const mediaResponse = await axios.get(mediaUrl, {
+      headers: {
+        Authorization: `Bearer EAALcQJ0mJBABRMvW32I1xZAsN1QSFNgaEGsGDCijsTGiH6DU3skeGwVSCJQ3VeXyNyZAfZAeT9wBcW910tJUKZBW8bQHIHIhsWk1i3pcHciQtakk8fMobZBZCgZCZB3f9eVw63ahDpSZCQpxXjUo2VLrTheMV7ziiRARRVhZCdJmY8OnkdU5dguk6qw0ZBCnB0hJiZCehvF7Iix4Arw5WNpNdpFQzeLxmYuq511N3PkG9sFCe3ZBJjBtVYRjDsAYeslXJCahujQlZBnMSnnZA5HZBbbvJZBnvBePD`
+      },
+      responseType: "arraybuffer"
+    });
+
+    // Temporary: return original URL (we'll improve next step)
+    return mediaUrl;
+
   } catch (error) {
-    console.error("Media URL error:", error.response?.data || error.message);
+    console.error("Media error:", error.response?.data || error.message);
     return null;
   }
 }
