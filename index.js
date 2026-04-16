@@ -125,7 +125,7 @@ app.post("/webhook", async (req, res) => {
 
   await sendMessage(
     from,
-    "✅ Payment received!\n\nWe will verify and confirm your order 🚚"
+    "✅ Thank you for the payment!\n\n🧾 Order ID: ${orderId}\n\nWe will confirm order shortly 🚚"
   );
 
   return res.sendStatus(200);
@@ -205,13 +205,15 @@ async function sendMessage(to, text) {
 
 async function saveOrder(data) {
   try {
+    const orderId = "ORD" + Date.now();
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEET_ID,
-      range: "Sheet1!A:G",
+      range: "Sheet1!A:H",
       valueInputOption: "USER_ENTERED",
       requestBody: {
         values: [
           [
+            orderId,
             new Date().toLocaleString(),
             data.phone,
             data.product,
