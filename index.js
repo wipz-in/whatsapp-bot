@@ -202,9 +202,7 @@ async function sendMessage(to, text) {
 
 
 // =========================
-// 🚀 START SERVER
-// =========================
-const PORT = process.env.PORT || 3000;
+
 async function saveOrder(data) {
   try {
     await sheets.spreadsheets.values.append({
@@ -231,4 +229,7 @@ async function saveOrder(data) {
     console.error("❌ Sheet error:", err.message);
   }
 }
+// 🚀 START SERVER (ONLY HERE)
+const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => console.log("Server running"));
