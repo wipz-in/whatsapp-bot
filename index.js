@@ -100,7 +100,7 @@ app.post("/webhook", async (req, res) => {
   const amount = userOrders[from].price || 0;
 
   // ✅ Correct UPI link (NO https)
-  const upiLink = `upi://pay?pa=9657748074-3@ibl&pn=Wipz&am=${amount}&cu=INR`;
+  const upiLink = `https://upi://pay?pa=9657748074-3@ibl&pn=Wipz&am=${amount}&cu=INR`;
 
   userState[from].step = "payment";
 
@@ -217,7 +217,7 @@ async function getMediaUrl(mediaId) {
 
     const mediaUrl = response.data.url;
 
-    // Step 2: Get actual downloadable URL
+    // Step 2: Download image
     const mediaResponse = await axios.get(mediaUrl, {
       headers: {
         Authorization: `Bearer EAALcQJ0mJBABRIZBbSZC8xRWwfR2PJKyFcRGW6Me5rVzNkqFQcYZCcgdrTJQuwebIoMZCDaskgAY5YoJG064j3Be7GVgVFj8OBLXA6qT7x29WJQ4lPJzDoTGjnFA9qaa2BTqf32qlx0LtWOmTJ8lGu50628Ggkvv73vMEZAGmIecSu3OwpZBgEzEdfxoptp1LObXzlF9a1fxwiMLJe26ZCOcDv3qaVe1texBCVscZC5osUFfeUGgfwQhNHRSSvEsZA6eMJuvTKJRgOH2aytSq2o2ZCWWeZA`
@@ -225,8 +225,12 @@ async function getMediaUrl(mediaId) {
       responseType: "arraybuffer"
     });
 
-    // Temporary: return original URL (we'll improve next step)
-    return mediaUrl;
+    // Step 3: Upload to Cloudinary
+    const uploadedUrl = await uploadToCloudinary(mediaResponse.data);
+
+    console.log("Uploaded Image URL:", uploadedUrl);
+
+    return uploadedUrl; // ✅ FINAL RETURN
 
   } catch (error) {
     console.error("Media error:", error.response?.data || error.message);
