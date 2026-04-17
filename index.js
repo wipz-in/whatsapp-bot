@@ -79,13 +79,14 @@ app.post("/webhook", async (req, res) => {
     console.error("Chat log error:", err.message);
   }
 }
-    
+    const from = message.from;
+    const type = message.type;
     await saveChatLog({
   phone: from,
   message: message.text?.body || type,
   step: userState[from]?.step || "new"
 });
-    const type = message.type;
+
 
     console.log("Incoming:", JSON.stringify(message, null, 2));
 
