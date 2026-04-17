@@ -93,7 +93,7 @@ app.post("/webhook", async (req, res) => {
 
       const amount = userOrders[from].price || 0;
 
-      const upiLink = `https://upi://pay?pa=pktambe@upi&pn=Wipz&am=${amount}`;
+      const upiLink = `https://upi://pay?pa=9657748074-3@ibl@upi&pn=Wipz&am=${amount}`;
 
       userState[from].step = "payment";
 
@@ -190,7 +190,7 @@ async function getMediaUrl(mediaId) {
       `https://graph.facebook.com/v25.0/${mediaId}`,
       {
         headers: {
-          Authorization: `Bearer EAALcQJ0mJBABRMvW32I1xZAsN1QSFNgaEGsGDCijsTGiH6DU3skeGwVSCJQ3VeXyNyZAfZAeT9wBcW910tJUKZBW8bQHIHIhsWk1i3pcHciQtakk8fMobZBZCgZCZB3f9eVw63ahDpSZCQpxXjUo2VLrTheMV7ziiRARRVhZCdJmY8OnkdU5dguk6qw0ZBCnB0hJiZCehvF7Iix4Arw5WNpNdpFQzeLxmYuq511N3PkG9sFCe3ZBJjBtVYRjDsAYeslXJCahujQlZBnMSnnZA5HZBbbvJZBnvBePD`
+          Authorization: `Bearer EAALcQJ0mJBABRIZBbSZC8xRWwfR2PJKyFcRGW6Me5rVzNkqFQcYZCcgdrTJQuwebIoMZCDaskgAY5YoJG064j3Be7GVgVFj8OBLXA6qT7x29WJQ4lPJzDoTGjnFA9qaa2BTqf32qlx0LtWOmTJ8lGu50628Ggkvv73vMEZAGmIecSu3OwpZBgEzEdfxoptp1LObXzlF9a1fxwiMLJe26ZCOcDv3qaVe1texBCVscZC5osUFfeUGgfwQhNHRSSvEsZA6eMJuvTKJRgOH2aytSq2o2ZCWWeZA`
         }
       }
     );
@@ -200,7 +200,7 @@ async function getMediaUrl(mediaId) {
     // Step 2: Get actual downloadable URL
     const mediaResponse = await axios.get(mediaUrl, {
       headers: {
-        Authorization: `Bearer EAALcQJ0mJBABRMvW32I1xZAsN1QSFNgaEGsGDCijsTGiH6DU3skeGwVSCJQ3VeXyNyZAfZAeT9wBcW910tJUKZBW8bQHIHIhsWk1i3pcHciQtakk8fMobZBZCgZCZB3f9eVw63ahDpSZCQpxXjUo2VLrTheMV7ziiRARRVhZCdJmY8OnkdU5dguk6qw0ZBCnB0hJiZCehvF7Iix4Arw5WNpNdpFQzeLxmYuq511N3PkG9sFCe3ZBJjBtVYRjDsAYeslXJCahujQlZBnMSnnZA5HZBbbvJZBnvBePD`
+        Authorization: `Bearer EAALcQJ0mJBABRIZBbSZC8xRWwfR2PJKyFcRGW6Me5rVzNkqFQcYZCcgdrTJQuwebIoMZCDaskgAY5YoJG064j3Be7GVgVFj8OBLXA6qT7x29WJQ4lPJzDoTGjnFA9qaa2BTqf32qlx0LtWOmTJ8lGu50628Ggkvv73vMEZAGmIecSu3OwpZBgEzEdfxoptp1LObXzlF9a1fxwiMLJe26ZCOcDv3qaVe1texBCVscZC5osUFfeUGgfwQhNHRSSvEsZA6eMJuvTKJRgOH2aytSq2o2ZCWWeZA`
       },
       responseType: "arraybuffer"
     });
@@ -229,7 +229,7 @@ async function sendMessage(to, text) {
       },
       {
         headers: {
-          Authorization: `Bearer EAALcQJ0mJBABRMvW32I1xZAsN1QSFNgaEGsGDCijsTGiH6DU3skeGwVSCJQ3VeXyNyZAfZAeT9wBcW910tJUKZBW8bQHIHIhsWk1i3pcHciQtakk8fMobZBZCgZCZB3f9eVw63ahDpSZCQpxXjUo2VLrTheMV7ziiRARRVhZCdJmY8OnkdU5dguk6qw0ZBCnB0hJiZCehvF7Iix4Arw5WNpNdpFQzeLxmYuq511N3PkG9sFCe3ZBJjBtVYRjDsAYeslXJCahujQlZBnMSnnZA5HZBbbvJZBnvBePD`,
+          Authorization: `Bearer EAALcQJ0mJBABRIZBbSZC8xRWwfR2PJKyFcRGW6Me5rVzNkqFQcYZCcgdrTJQuwebIoMZCDaskgAY5YoJG064j3Be7GVgVFj8OBLXA6qT7x29WJQ4lPJzDoTGjnFA9qaa2BTqf32qlx0LtWOmTJ8lGu50628Ggkvv73vMEZAGmIecSu3OwpZBgEzEdfxoptp1LObXzlF9a1fxwiMLJe26ZCOcDv3qaVe1texBCVscZC5osUFfeUGgfwQhNHRSSvEsZA6eMJuvTKJRgOH2aytSq2o2ZCWWeZA`,
           "Content-Type": "application/json"
         }
       }
