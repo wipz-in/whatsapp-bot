@@ -56,10 +56,34 @@ app.post("/webhook", async (req, res) => {
     if (!message) return res.sendStatus(200);
 
     const from = message.from;
-    await saveOrder({
+    async function saveChatLog(data) {
+  try {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range: "Logs!A:D", // 👈 IMPORTANT
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: [
+          [
+            new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+            data.phone,
+            data.message,
+            data.step
+          ]
+        ]
+      }
+    });
+
+    console.log("Chat saved");
+  } catch (err) {
+    console.error("Chat log error:", err.message);
+  }
+}
+    
+    await saveChatLog({
   phone: from,
-  status: userState[from]?.step || "new",
-  raw: message.text?.body || message.type
+  message: message.text?.body || type,
+  step: userState[from]?.step || "new"
 });
     const type = message.type;
 
@@ -142,7 +166,12 @@ app.post("/webhook", async (req, res) => {
 
   userState[from].step = "done";
 
-  const orderId = "ORD" + Date.now();
+  const now = new Date();
+const orderId =
+  "ORD" +
+  now.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" }).replace(/\//g, "") +
+  "-" +
+  now.getTime().toString().slice(-5);
   userOrders[from].orderId = orderId;
 
   // ✅ SAVE TO GOOGLE SHEET
@@ -292,7 +321,7 @@ async function saveOrder(data) {
         values: [
           [
             data.orderId || "",
-            new Date().toLocaleString(),
+            new Date().toLocaleString("en-IN", {    timeZone: "Asia/Kolkata"  }),
             data.phone || "",
             data.product || "",
             data.price || "",
