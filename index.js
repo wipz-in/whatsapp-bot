@@ -1,6 +1,12 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const axios = require("axios");
+const cloudinary = require("cloudinary").v2;
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
 const { google } = require("googleapis");
 
 const auth = new google.auth.GoogleAuth({
@@ -87,23 +93,37 @@ app.post("/webhook", async (req, res) => {
     // =========================
     // 📦 ADDRESS
     // =========================
-    if (type === "text" && userState[from].step === "address") {
-      userOrders[from].address = message.text.body;
-      userOrders[from].status = "address_received";
+   if (type === "text" && userState[from].step === "address") {
+  userOrders[from].address = message.text.body;
+  userOrders[from].status = "address_received";
 
-      const amount = userOrders[from].price || 0;
+  const amount = userOrders[from].price || 0;
 
-      const upiLink = `https://upi://pay?pa=9657748074-3@ibl@upi&pn=Wipz&am=${amount}`;
+  // ✅ Correct UPI link (NO https)
+  const upiLink = `upi://pay?pa=9657748074-3@ibl&pn=Wipz&am=${amount}&cu=INR`;
 
-      userState[from].step = "payment";
+  userState[from].step = "payment";
 
-      await sendMessage(
-        from,
-        `💳 Pay here:\n${upiLink}\n\nAfter payment:\nSend screenshot + UTR`
-      );
+  // ✅ Message 1
+  await sendMessage(
+    from,
+    "💳 Please complete your payment using the link below 👇"
+  );
 
-      return res.sendStatus(200);
-    }
+  // ✅ Message 2 (ONLY LINK → clickable)
+  await sendMessage(
+    from,
+    upiLink
+  );
+
+  // ✅ Message 3
+  await sendMessage(
+    from,
+    "After payment, send screenshot + UTR 📸"
+  );
+
+  return res.sendStatus(200);
+}
 
     // =========================
     // 📸 PAYMENT SCREENSHOT
@@ -213,7 +233,18 @@ async function getMediaUrl(mediaId) {
     return null;
   }
 }
-
+// Save screenshot cloud
+async function uploadToCloudinary(imageBuffer) {
+  return new Promise((resolve, reject) => {
+    cloudinary.uploader.upload_stream(
+      { folder: "whatsapp_orders" },
+      (error, result) => {
+        if (error) reject(error);
+        else resolve(result.secure_url);
+      }
+    ).end(imageBuffer);
+  });
+}
 // =========================
 // 📤 SEND MESSAGE FUNCTION
 // =========================
