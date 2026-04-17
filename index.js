@@ -56,6 +56,11 @@ app.post("/webhook", async (req, res) => {
     if (!message) return res.sendStatus(200);
 
     const from = message.from;
+    await saveOrder({
+  phone: from,
+  status: userState[from]?.step || "new",
+  raw: message.text?.body || message.type
+});
     const type = message.type;
 
     console.log("Incoming:", JSON.stringify(message, null, 2));
@@ -210,7 +215,7 @@ async function getMediaUrl(mediaId) {
       `https://graph.facebook.com/v25.0/${mediaId}`,
       {
         headers: {
-          Authorization: `Bearer EAALcQJ0mJBABRIZBbSZC8xRWwfR2PJKyFcRGW6Me5rVzNkqFQcYZCcgdrTJQuwebIoMZCDaskgAY5YoJG064j3Be7GVgVFj8OBLXA6qT7x29WJQ4lPJzDoTGjnFA9qaa2BTqf32qlx0LtWOmTJ8lGu50628Ggkvv73vMEZAGmIecSu3OwpZBgEzEdfxoptp1LObXzlF9a1fxwiMLJe26ZCOcDv3qaVe1texBCVscZC5osUFfeUGgfwQhNHRSSvEsZA6eMJuvTKJRgOH2aytSq2o2ZCWWeZA`
+          Authorization: `Bearer EAALcQJ0mJBABRLQ1ZAsq94ZBd4sgg7VYSwzUD1gobZC4VC6fH6BCrgGH0c0ZB2dVnZAgZASau1jlbOXZAgx1cYvdjqxHgqt3MBQSqzX3yDQfzNOsBbGbG8ZCJUS9ZBpvdpuRyFAyZCjoT0vnABqjrLBjvnctxIDb5qCazqNqVBiy16NZBSkng2NcTAHb184RIl0uJmaHuQzZAZBksQS8ZCHVvB1QVhOGGzPKZA0OlPntNtwsniG2IVMOPOxhwuBTyIU2mGZCfCI1mPnSNgFiTqHNNoMJAZA6Tl2wi`
         }
       }
     );
@@ -220,7 +225,7 @@ async function getMediaUrl(mediaId) {
     // Step 2: Download image
     const mediaResponse = await axios.get(mediaUrl, {
       headers: {
-        Authorization: `Bearer EAALcQJ0mJBABRIZBbSZC8xRWwfR2PJKyFcRGW6Me5rVzNkqFQcYZCcgdrTJQuwebIoMZCDaskgAY5YoJG064j3Be7GVgVFj8OBLXA6qT7x29WJQ4lPJzDoTGjnFA9qaa2BTqf32qlx0LtWOmTJ8lGu50628Ggkvv73vMEZAGmIecSu3OwpZBgEzEdfxoptp1LObXzlF9a1fxwiMLJe26ZCOcDv3qaVe1texBCVscZC5osUFfeUGgfwQhNHRSSvEsZA6eMJuvTKJRgOH2aytSq2o2ZCWWeZA`
+        Authorization: `Bearer EAALcQJ0mJBABRLQ1ZAsq94ZBd4sgg7VYSwzUD1gobZC4VC6fH6BCrgGH0c0ZB2dVnZAgZASau1jlbOXZAgx1cYvdjqxHgqt3MBQSqzX3yDQfzNOsBbGbG8ZCJUS9ZBpvdpuRyFAyZCjoT0vnABqjrLBjvnctxIDb5qCazqNqVBiy16NZBSkng2NcTAHb184RIl0uJmaHuQzZAZBksQS8ZCHVvB1QVhOGGzPKZA0OlPntNtwsniG2IVMOPOxhwuBTyIU2mGZCfCI1mPnSNgFiTqHNNoMJAZA6Tl2wi`
       },
       responseType: "arraybuffer"
     });
@@ -264,7 +269,7 @@ async function sendMessage(to, text) {
       },
       {
         headers: {
-          Authorization: `Bearer EAALcQJ0mJBABRIZBbSZC8xRWwfR2PJKyFcRGW6Me5rVzNkqFQcYZCcgdrTJQuwebIoMZCDaskgAY5YoJG064j3Be7GVgVFj8OBLXA6qT7x29WJQ4lPJzDoTGjnFA9qaa2BTqf32qlx0LtWOmTJ8lGu50628Ggkvv73vMEZAGmIecSu3OwpZBgEzEdfxoptp1LObXzlF9a1fxwiMLJe26ZCOcDv3qaVe1texBCVscZC5osUFfeUGgfwQhNHRSSvEsZA6eMJuvTKJRgOH2aytSq2o2ZCWWeZA`,
+          Authorization: `Bearer EAALcQJ0mJBABRLQ1ZAsq94ZBd4sgg7VYSwzUD1gobZC4VC6fH6BCrgGH0c0ZB2dVnZAgZASau1jlbOXZAgx1cYvdjqxHgqt3MBQSqzX3yDQfzNOsBbGbG8ZCJUS9ZBpvdpuRyFAyZCjoT0vnABqjrLBjvnctxIDb5qCazqNqVBiy16NZBSkng2NcTAHb184RIl0uJmaHuQzZAZBksQS8ZCHVvB1QVhOGGzPKZA0OlPntNtwsniG2IVMOPOxhwuBTyIU2mGZCfCI1mPnSNgFiTqHNNoMJAZA6Tl2wi`,
           "Content-Type": "application/json"
         }
       }
@@ -279,7 +284,6 @@ async function sendMessage(to, text) {
 
 async function saveOrder(data) {
   try {
-    data.orderId;
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEET_ID,
       range: "Sheet1",
@@ -287,25 +291,26 @@ async function saveOrder(data) {
       requestBody: {
         values: [
           [
-            data.orderId,
+            data.orderId || "",
             new Date().toLocaleString(),
-            data.phone,
-            data.product,
-            data.price,
-            data.address,
-            data.status,
-            data.screenshot,
-            data.raw
+            data.phone || "",
+            data.product || "",
+            data.price || "",
+            data.address || "",
+            data.status || "",
+            data.screenshot || "",
+            data.raw || ""
           ]
         ]
       }
     });
 
-    console.log("✅ Order saved to sheet");
+    console.log("Saved (partial/full)");
   } catch (err) {
-    console.error("❌ Sheet error:", err.message);
+    console.error("Sheet error:", err.message);
   }
 }
+
 // 🚀 START SERVER (ONLY HERE)
 const PORT = process.env.PORT || 3000;
 
