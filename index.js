@@ -46,21 +46,14 @@ app.get("/webhook", (req, res) => {
   }
 });
 
-
 // =========================
-// 🚀 MAIN WEBHOOK
+// 📝 SAVE CHAT LOG
 // =========================
-app.post("/webhook", async (req, res) => {
-  try {
-    const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
-    if (!message) return res.sendStatus(200);
-
-    const from = message.from;
-    async function saveChatLog(data) {
+async function saveChatLog(data) {
   try {
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEET_ID,
-      range: "Logs!A:D", // 👈 IMPORTANT
+      range: "Logs!A:D",
       valueInputOption: "USER_ENTERED",
       requestBody: {
         values: [
@@ -73,20 +66,28 @@ app.post("/webhook", async (req, res) => {
         ]
       }
     });
-
-    console.log("Chat saved");
   } catch (err) {
     console.error("Chat log error:", err.message);
   }
 }
+// =========================
+// 🚀 MAIN WEBHOOK
+// =========================
+
+app.post("/webhook", async (req, res) => {
+  try {
+    const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+    if (!message) return res.sendStatus(200);
+
     const from = message.from;
     const type = message.type;
-    await saveChatLog({
-  phone: from,
-  message: message.text?.body || type,
-  step: userState[from]?.step || "new"
-});
 
+    // ✅ SAVE CHAT
+    await saveChatLog({
+      phone: from,
+      message: message.text?.body || type,
+      step: userState[from]?.step || "new"
+    });
 
     console.log("Incoming:", JSON.stringify(message, null, 2));
 
@@ -130,7 +131,7 @@ app.post("/webhook", async (req, res) => {
   const amount = userOrders[from].price || 0;
 
   // ✅ Correct UPI link (NO https)
-  const upiLink = `https://upi://pay?pa=9657748074-3@ibl&pn=Wipz&am=${amount}&cu=INR`;
+  const upiLink = `upi://pay?pa=9657748074-3@ibl&pn=Wipz&am=${amount}&cu=INR`;
 
   userState[from].step = "payment";
 
