@@ -246,7 +246,7 @@ async function getMediaUrl(mediaId) {
       `https://graph.facebook.com/v25.0/${mediaId}`,
       {
         headers: {
-          Authorization: `Bearer EAALcQJ0mJBABRLQ1ZAsq94ZBd4sgg7VYSwzUD1gobZC4VC6fH6BCrgGH0c0ZB2dVnZAgZASau1jlbOXZAgx1cYvdjqxHgqt3MBQSqzX3yDQfzNOsBbGbG8ZCJUS9ZBpvdpuRyFAyZCjoT0vnABqjrLBjvnctxIDb5qCazqNqVBiy16NZBSkng2NcTAHb184RIl0uJmaHuQzZAZBksQS8ZCHVvB1QVhOGGzPKZA0OlPntNtwsniG2IVMOPOxhwuBTyIU2mGZCfCI1mPnSNgFiTqHNNoMJAZA6Tl2wi`
+          Authorization: `Bearer EAALcQJ0mJBABRGAIFmoAkgt8RNOOcfuYKxJEUssi5vDgaQvM3ZA8v0CvC9vZABISY6mkuoiZCz2ISMpdHZB1CFjyJdlCMA5QFddcuZCgMSRwr6HKljCJ7GytzFZCqYtU9vGDLvo22xusJfDH5RXzDxS1fDiFrXcZACtuXpu2Lo5bQFKGthKLvIzqaBFOJhqbG0q35Jk6WekdcnaRdT5Y63DgpHN1eV5WFCIZAZAJDrCIjFI0UM1GddKsfXOVPfztLuFtwTJWaDIjpl6u8DWakHqL0P2Fe`
         }
       }
     );
@@ -256,7 +256,7 @@ async function getMediaUrl(mediaId) {
     // Step 2: Download image
     const mediaResponse = await axios.get(mediaUrl, {
       headers: {
-        Authorization: `Bearer EAALcQJ0mJBABRLQ1ZAsq94ZBd4sgg7VYSwzUD1gobZC4VC6fH6BCrgGH0c0ZB2dVnZAgZASau1jlbOXZAgx1cYvdjqxHgqt3MBQSqzX3yDQfzNOsBbGbG8ZCJUS9ZBpvdpuRyFAyZCjoT0vnABqjrLBjvnctxIDb5qCazqNqVBiy16NZBSkng2NcTAHb184RIl0uJmaHuQzZAZBksQS8ZCHVvB1QVhOGGzPKZA0OlPntNtwsniG2IVMOPOxhwuBTyIU2mGZCfCI1mPnSNgFiTqHNNoMJAZA6Tl2wi`
+        Authorization: `Bearer EAALcQJ0mJBABRGAIFmoAkgt8RNOOcfuYKxJEUssi5vDgaQvM3ZA8v0CvC9vZABISY6mkuoiZCz2ISMpdHZB1CFjyJdlCMA5QFddcuZCgMSRwr6HKljCJ7GytzFZCqYtU9vGDLvo22xusJfDH5RXzDxS1fDiFrXcZACtuXpu2Lo5bQFKGthKLvIzqaBFOJhqbG0q35Jk6WekdcnaRdT5Y63DgpHN1eV5WFCIZAZAJDrCIjFI0UM1GddKsfXOVPfztLuFtwTJWaDIjpl6u8DWakHqL0P2Fe`
       },
       responseType: "arraybuffer"
     });
@@ -300,7 +300,7 @@ async function sendMessage(to, text) {
       },
       {
         headers: {
-          Authorization: `Bearer EAALcQJ0mJBABRLQ1ZAsq94ZBd4sgg7VYSwzUD1gobZC4VC6fH6BCrgGH0c0ZB2dVnZAgZASau1jlbOXZAgx1cYvdjqxHgqt3MBQSqzX3yDQfzNOsBbGbG8ZCJUS9ZBpvdpuRyFAyZCjoT0vnABqjrLBjvnctxIDb5qCazqNqVBiy16NZBSkng2NcTAHb184RIl0uJmaHuQzZAZBksQS8ZCHVvB1QVhOGGzPKZA0OlPntNtwsniG2IVMOPOxhwuBTyIU2mGZCfCI1mPnSNgFiTqHNNoMJAZA6Tl2wi`,
+          Authorization: `Bearer EAALcQJ0mJBABRGAIFmoAkgt8RNOOcfuYKxJEUssi5vDgaQvM3ZA8v0CvC9vZABISY6mkuoiZCz2ISMpdHZB1CFjyJdlCMA5QFddcuZCgMSRwr6HKljCJ7GytzFZCqYtU9vGDLvo22xusJfDH5RXzDxS1fDiFrXcZACtuXpu2Lo5bQFKGthKLvIzqaBFOJhqbG0q35Jk6WekdcnaRdT5Y63DgpHN1eV5WFCIZAZAJDrCIjFI0UM1GddKsfXOVPfztLuFtwTJWaDIjpl6u8DWakHqL0P2Fe`,
           "Content-Type": "application/json"
         }
       }
