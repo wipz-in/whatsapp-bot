@@ -22,19 +22,17 @@ const app = express();
 app.use(bodyParser.json());
 
 // 🔐 ENV VARIABLES (set in Render)
-const VERIFY_TOKEN = "my_verify_token";
-const PHONE_ID = process.env.PHONE_NUMBER_ID;
-const TOKEN = process.env.ACCESS_TOKEN;
+const VERIFY_TOKEN   = "my_verify_token";
+const PHONE_ID       = process.env.PHONE_NUMBER_ID;
+const TOKEN          = process.env.ACCESS_TOKEN;
+const UPI_VPA        = process.env.UPI_VPA  || "9657748074-3@ibl";
+const UPI_NAME       = process.env.UPI_NAME || "Wipz";
 
-// ✅ Your UPI VPA (Virtual Payment Address)
-// Set this in Render env as UPI_VPA, e.g. "9657748074-3@ibl"
-const UPI_VPA = process.env.UPI_VPA || "9657748074-3@ibl";
-
-// ✅ Your business/store name shown in UPI apps
-const UPI_NAME = process.env.UPI_NAME || "Wipz";
+// ✅ EXACT name from WhatsApp Manager → Payment configurations
+const PAYMENT_CONFIG_NAME = "whatsapp_orders";
 
 // 🧠 Memory (temporary storage)
-const userState = {};
+const userState  = {};
 const userOrders = {};
 
 
@@ -42,8 +40,8 @@ const userOrders = {};
 // ✅ WEBHOOK VERIFY
 // =========================
 app.get("/webhook", (req, res) => {
-  const mode = req.query["hub.mode"];
-  const token = req.query["hub.verify_token"];
+  const mode      = req.query["hub.mode"];
+  const token     = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
 
   if (mode && token === VERIFY_TOKEN) {
@@ -52,6 +50,7 @@ app.get("/webhook", (req, res) => {
     return res.sendStatus(403);
   }
 });
+
 
 // =========================
 // 📝 SAVE CHAT LOG
@@ -63,14 +62,12 @@ async function saveChatLog(data) {
       range: "Logs!A:D",
       valueInputOption: "USER_ENTERED",
       requestBody: {
-        values: [
-          [
-            new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
-            data.phone,
-            data.message,
-            data.step
-          ]
-        ]
+        values: [[
+          new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+          data.phone,
+          data.message,
+          data.step
+        ]]
       }
     });
   } catch (err) {
@@ -78,90 +75,87 @@ async function saveChatLog(data) {
   }
 }
 
+
 // =========================
-// 💳 SEND UPI INTENT PAYMENT MESSAGE
-// Using Meta's native order_details interactive message
-// No PG/Razorpay config needed — opens any UPI app directly
+// 💳 SEND NATIVE WHATSAPP PAYMENT MESSAGE
+//
+// Uses "whatsapp_orders" VPA config from WhatsApp Manager.
+// Shows a "Review & Pay" button — customer taps and their
+// UPI app opens with amount pre-filled.
 // =========================
 async function sendUpiPaymentMessage(to, orderDetails) {
   const { price, name, orderId } = orderDetails;
 
-  // Amount in paise (offset: 100 means value is in paise, so ₹1 = 100)
+  // Amount must be in PAISE (₹1 = 100 paise)
   const amountInPaise = Math.round(price * 100);
 
-  try {
-    await axios.post(
-      `https://graph.facebook.com/v25.0/${PHONE_ID}/messages`,
-      {
-        messaging_product: "whatsapp",
-        recipient_type: "individual",
-        to: to,
-        type: "interactive",
-        interactive: {
-          type: "order_details",
-          body: {
-            text: `💳 Complete your payment for *${name}*\n\nYour UPI app will open automatically to pay ✅`
+  const payload = {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to: to,
+    type: "interactive",
+    interactive: {
+      type: "order_details",
+      body: {
+        text: `Here's your order summary for *${name}* 🛍️\n\nTap *Review & Pay* to complete payment via UPI ✅`
+      },
+      footer: {
+        text: "Wipz — Loved by 1000+ customers 💖"
+      },
+      action: {
+        name: "review_and_pay",
+        parameters: {
+          reference_id: orderId,
+          type: "digital-goods",
+          payment_type: "upi_intent",
+          payment_configuration: PAYMENT_CONFIG_NAME,  // ✅ "whatsapp_orders"
+          currency: "INR",
+          total_amount: {
+            value: amountInPaise,   // e.g. ₹309 → 30900
+            offset: 100
           },
-          footer: {
-            text: "Wipz — Trusted by 1000+ customers 💖"
-          },
-          action: {
-            name: "review_and_pay",
-            parameters: {
-              reference_id: orderId,         // your internal order reference
-              type: "digital-goods",          // use "physical-goods" if you prefer
-              payment_type: "upi_intent",     // ✅ UPI Intent — no PG setup needed
-              payment_settings: [
-                {
-                  type: "upi_intent",
-                  upi_intent: {
-                    upi_payee_vpa: UPI_VPA,         // your UPI ID, e.g. 9657748074-3@ibl
-                    upi_payee_name: UPI_NAME        // displayed in UPI app
-                  }
-                }
-              ],
-              currency: "INR",
-              total_amount: {
-                value: amountInPaise,   // e.g. ₹499 → 49900
-                offset: 100             // tells Meta: divide by 100 to get ₹
-              },
-              order: {
-                status: "pending",
-                items: [
-                  {
-                    retailer_id: String(orderId),
-                    name: name,
-                    amount: {
-                      value: amountInPaise,
-                      offset: 100
-                    },
-                    quantity: 1
-                  }
-                ],
-                subtotal: {
+          order: {
+            status: "pending",
+            items: [
+              {
+                retailer_id: String(orderId),
+                name: name,
+                amount: {
                   value: amountInPaise,
                   offset: 100
                 },
-                tax: {
-                  value: 0,
-                  offset: 100,
-                  description: "GST Inclusive"
-                },
-                shipping: {
-                  value: 0,
-                  offset: 100,
-                  description: "Free Delivery"
-                },
-                discount: {
-                  value: 0,
-                  offset: 100,
-                  description: ""
-                }
+                quantity: 1
               }
+            ],
+            subtotal: {
+              value: amountInPaise,
+              offset: 100
+            },
+            tax: {
+              value: 0,
+              offset: 100,
+              description: "GST Inclusive"
+            },
+            shipping: {
+              value: 0,
+              offset: 100,
+              description: "Free Delivery"
+            },
+            discount: {
+              value: 0,
+              offset: 100,
+              description: ""
             }
           }
         }
-      },
+      }
+    }
+  };
+
+  try {
+    const response = await axios.post(
+      `https://graph.facebook.com/v25.0/${PHONE_ID}/messages`,
+      payload,
       {
         headers: {
           Authorization: `Bearer ${TOKEN}`,
@@ -169,88 +163,82 @@ async function sendUpiPaymentMessage(to, orderDetails) {
         }
       }
     );
+    console.log("✅ Payment message sent:", JSON.stringify(response.data, null, 2));
 
-    console.log("✅ UPI Intent payment message sent to", to);
   } catch (error) {
-    console.error("❌ Payment message error:", error.response?.data || error.message);
+    const errData = error.response?.data;
+    console.error("❌ Payment message failed:", JSON.stringify(errData, null, 2));
 
-    // ====================================================
-    // ⚠️ FALLBACK: If order_details is not enabled on your
-    // WABA yet, fall back to the plain UPI link as text.
-    // Remove this fallback once Meta enables it for you.
-    // ====================================================
-    console.log("⚠️ Falling back to plain UPI link...");
-    const upiLink = `upi://pay?pa=${UPI_VPA}&pn=${encodeURIComponent(UPI_NAME)}&am=${price}&cu=INR&tn=Order_${orderId}`;
-    await sendMessage(to, `💳 Pay using UPI:\n\n${upiLink}\n\n_After payment, send screenshot + UTR 📸_`);
+    // ⚠️ FALLBACK: show UPI details as plain text
+    await sendMessage(
+      to,
+      `💳 *Complete your payment manually:*\n\nUPI ID: *${UPI_VPA}*\nAmount: *₹${price}*\nName: ${UPI_NAME}\n\n_After payment, send screenshot + UTR 📸_`
+    );
   }
 }
+
 
 // =========================
 // 🚀 MAIN WEBHOOK
 // =========================
-
 app.post("/webhook", async (req, res) => {
   try {
     const body = req.body;
 
     // ================================================
-    // ✅ HANDLE PAYMENT STATUS WEBHOOK FROM META
+    // ✅ PAYMENT STATUS CALLBACK FROM META
     // Meta sends this when customer completes UPI payment
     // ================================================
-    const paymentUpdate = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+    const incomingMsg = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+
     if (
-      paymentUpdate?.type === "interactive" &&
-      paymentUpdate?.interactive?.type === "payment_info"
+      incomingMsg?.type === "interactive" &&
+      incomingMsg?.interactive?.type === "payment_info"
     ) {
-      const from = paymentUpdate.from;
-      const paymentInfo = paymentUpdate.interactive.payment_info;
-      const paymentStatus = paymentInfo?.payment_status;   // "captured" or "failed"
+      const from        = incomingMsg.from;
+      const paymentInfo = incomingMsg.interactive.payment_info;
+      const status      = paymentInfo?.payment_status;   // "captured" | "failed"
       const referenceId = paymentInfo?.reference_id;
-      const transactionId = paymentInfo?.transaction_id;
-      const amount = paymentInfo?.total_amount?.value / 100; // convert paise → ₹
+      const txnId       = paymentInfo?.transaction_id;
+      const amount      = (paymentInfo?.total_amount?.value || 0) / 100;
 
-      console.log(`💰 Payment ${paymentStatus} for order ${referenceId}, txn: ${transactionId}`);
+      console.log(`💰 Payment [${status}] — Order: ${referenceId}, TXN: ${txnId}`);
 
-      if (paymentStatus === "captured") {
-        // ✅ Payment confirmed by Meta
+      if (status === "captured") {
         if (userOrders[from]) {
-          userOrders[from].status = "paid";
-          userOrders[from].transactionId = transactionId;
+          userOrders[from].status        = "paid";
+          userOrders[from].transactionId = txnId;
         }
 
-        // Update order in Google Sheet
         await saveOrder({
-          orderId: referenceId,
-          phone: from,
-          product: userOrders[from]?.name || "",
-          price: amount,
-          address: userOrders[from]?.address || "",
-          status: "PAID ✅",
-          screenshot: `UPI TXN: ${transactionId}`,
-          raw: JSON.stringify(paymentInfo)
+          orderId:    referenceId,
+          phone:      from,
+          product:    userOrders[from]?.name    || "",
+          price:      amount,
+          address:    userOrders[from]?.address || "",
+          status:     "PAID ✅",
+          screenshot: `UPI TXN: ${txnId}`,
+          raw:        JSON.stringify(paymentInfo)
         });
 
         userState[from] = { step: "done" };
 
         await sendMessage(
           from,
-          `✅ *Payment Confirmed!*\n\n🧾 Order ID: *${referenceId}*\n💰 Amount: ₹${amount}\n🔖 UTR/TXN: ${transactionId}\n\nYour order is being processed 🚚\nYou'll receive shipping updates soon\n\n💖 Thank you for shopping with *Wipz*!`
+          `✅ *Payment Confirmed!*\n\n🧾 Order ID: *${referenceId}*\n💰 Amount Paid: ₹${amount}\n🔖 UTR/TXN ID: ${txnId}\n\nYour order is being processed 🚚\nYou'll receive shipping updates soon!\n\n💖 Thank you for shopping with *Wipz*!`
         );
 
-        // Send order status update (updates the order card in chat)
         await sendOrderStatusUpdate(from, referenceId, "processing");
 
-      } else if (paymentStatus === "failed") {
-        // ❌ Payment failed
+      } else if (status === "failed") {
         await sendMessage(
           from,
-          `❌ Payment failed for Order ${referenceId}.\n\nPlease try again 👇`
+          `❌ Payment failed for Order *${referenceId}*.\n\nPlease try again 👇`
         );
-        // Re-send the payment message
         if (userOrders[from]) {
           await sendUpiPaymentMessage(from, {
-            price: userOrders[from].price,
-            name: userOrders[from].name,
+            price:   userOrders[from].price,
+            name:    userOrders[from].name,
             orderId: referenceId
           });
         }
@@ -260,7 +248,7 @@ app.post("/webhook", async (req, res) => {
     }
 
     // ================================================
-    // Normal message handling below
+    // Normal message flow
     // ================================================
     const message = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
     if (!message) return res.sendStatus(200);
@@ -268,23 +256,20 @@ app.post("/webhook", async (req, res) => {
     const from = message.from;
     const type = message.type;
 
-    // =========================
-    // 📝 SAVE CHAT LOG
-    // =========================
+    // Log chat
     let logMessage = message.text?.body || type;
     if (type === "order") {
       const product = message.order?.product_items?.[0];
       logMessage = product?.product_retailer_id || "Order placed";
     }
     await saveChatLog({
-      phone: from,
+      phone:   from,
       message: logMessage,
-      step: userState[from]?.step || "new"
+      step:    userState[from]?.step || "new"
     });
 
     console.log("Incoming:", JSON.stringify(message, null, 2));
 
-    // INIT USER
     if (!userState[from]) {
       userState[from] = { step: "idle" };
     }
@@ -293,18 +278,13 @@ app.post("/webhook", async (req, res) => {
     // 🛍️ ORDER FROM CATALOG
     // =========================
     if (type === "order") {
-      const product = message.order?.product_items?.[0];
-
-      const price = product?.item_price || 0;
-      const name = product?.product_retailer_id || "Product";
+      const product  = message.order?.product_items?.[0];
+      const price    = product?.item_price || 0;
+      const name     = product?.product_retailer_id || "Product";
       const quantity = product?.quantity || 1;
       const imageUrl = product?.image?.link || null;
 
-      userOrders[from] = {
-        price,
-        name,
-        status: "product_selected"
-      };
+      userOrders[from] = { price, name, status: "product_selected" };
 
       if (imageUrl) {
         await axios.post(
@@ -318,34 +298,26 @@ app.post("/webhook", async (req, res) => {
               caption: `🛍️ *${name}*\n\nQty: ${quantity}\nPrice: ₹${price}`
             }
           },
-          {
-            headers: {
-              Authorization: `Bearer ${TOKEN}`,
-              "Content-Type": "application/json"
-            }
-          }
+          { headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" } }
         );
       }
 
       userState[from].step = "address";
-
       await sendMessage(
         from,
         `😍 *${name}* selected!\n\nPlease send your delivery details:\n\nName:\nAddress:\nCity:\nPincode:\n📦`
       );
-
       return res.sendStatus(200);
     }
 
     // =========================
-    // 📦 ADDRESS → TRIGGER PAYMENT
+    // 📦 ADDRESS → SEND PAYMENT
     // =========================
     if (type === "text" && userState[from]?.step === "address") {
       userOrders[from].address = message.text.body;
-      userOrders[from].status = "address_received";
+      userOrders[from].status  = "address_received";
 
-      // Generate Order ID now (used as reference_id in payment)
-      const now = new Date();
+      const now     = new Date();
       const orderId =
         "ORD" +
         now.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" }).replace(/\//g, "") +
@@ -353,21 +325,20 @@ app.post("/webhook", async (req, res) => {
         now.getTime().toString().slice(-5);
 
       userOrders[from].orderId = orderId;
+      userState[from].step     = "payment";
 
-      userState[from].step = "payment";
+      await sendMessage(from, "🎉 Almost there! Here's your order summary with payment button 👇");
 
-      await sendMessage(from, "🎉 Great! Here's your order summary with payment button 👇");
-
-      // ✅ Send the native WhatsApp UPI Intent payment message
+      // ✅ Send native WhatsApp UPI payment message
       await sendUpiPaymentMessage(from, {
-        price: userOrders[from].price,
-        name: userOrders[from].name,
+        price:   userOrders[from].price,
+        name:    userOrders[from].name,
         orderId: orderId
       });
 
       await sendMessage(
         from,
-        "_Tap the *Review & Pay* button above to complete payment via any UPI app_ 📱"
+        "_Tap *Review & Pay* above to pay via Google Pay, PhonePe, Paytm or any UPI app 📱_"
       );
 
       return res.sendStatus(200);
@@ -375,39 +346,37 @@ app.post("/webhook", async (req, res) => {
 
     // =========================
     // 📸 MANUAL SCREENSHOT FALLBACK
-    // (Only if customer sends screenshot manually,
-    //  e.g. when UPI Intent webhook doesn't fire)
     // =========================
     if (type === "image" && userState[from]?.step === "payment") {
-      const mediaId = message.image.id;
+      const mediaId  = message.image.id;
       const imageUrl = await getMediaUrl(mediaId);
 
       userOrders[from].status = "payment_screenshot_sent";
-      userState[from].step = "done";
+      userState[from].step    = "done";
 
       const orderId = userOrders[from].orderId || "ORD-MANUAL";
 
       await saveOrder({
-        orderId: orderId,
-        phone: from,
-        product: userOrders[from].name,
-        price: userOrders[from].price,
-        address: userOrders[from].address,
-        status: "Screenshot received (manual verify needed)",
+        orderId,
+        phone:      from,
+        product:    userOrders[from].name,
+        price:      userOrders[from].price,
+        address:    userOrders[from].address,
+        status:     "Screenshot received — manual verify needed ⚠️",
         screenshot: imageUrl,
-        raw: JSON.stringify(userOrders[from])
+        raw:        JSON.stringify(userOrders[from])
       });
 
       await sendMessage(
         from,
-        `✅ Screenshot received!\n\n🧾 Order ID: ${orderId}\n\nWe'll verify your payment shortly and process your order 🚚\n\n💖 Thank you for shopping with Wipz!`
+        `✅ Screenshot received!\n\n🧾 Order ID: ${orderId}\n\nWe'll verify your payment and process your order shortly 🚚\n\n💖 Thank you for shopping with Wipz!`
       );
 
       return res.sendStatus(200);
     }
 
     // =========================
-    // 🤖 SMART FALLBACK
+    // 🤖 FALLBACK / GREET
     // =========================
     if (type === "text") {
       const text = message.text.body.toLowerCase();
@@ -420,14 +389,14 @@ app.post("/webhook", async (req, res) => {
           from,
           "👋 Hey! Welcome to *Wipz* 💫\n\nWe bring you stylish & super-comfy Women's Footwear,\nperfect for daily wear + outings ✨\n\n🔥 Loved by 1000+ happy customers.\n\n_Proudly Made in Maharashtra_"
         );
-
         await sendMessage(
           from,
           "😍 Let's find your perfect pair!\n\n🛍️ *Please select a product from the catalogue above.*\n\n_(Tap on catalogue button at top)_"
         );
+
       } else if (userState[from]?.step === "payment") {
-        // Remind to pay
-        await sendMessage(from, "💳 Please tap the *Review & Pay* button above to complete your payment 👆");
+        await sendMessage(from, "💳 Please tap *Review & Pay* above to complete your payment 👆");
+
       } else {
         await sendMessage(from, "👉 Please select a product from catalogue to continue 🛍️");
       }
@@ -443,9 +412,9 @@ app.post("/webhook", async (req, res) => {
   }
 });
 
+
 // =========================
-// 📦 SEND ORDER STATUS UPDATE
-// Updates the order card in WhatsApp chat after payment
+// 📦 ORDER STATUS UPDATE
 // =========================
 async function sendOrderStatusUpdate(to, referenceId, status) {
   try {
@@ -459,33 +428,28 @@ async function sendOrderStatusUpdate(to, referenceId, status) {
           type: "order_status",
           body: {
             text: status === "processing"
-              ? "✅ Your payment was received! Order is now being processed."
-              : `📦 Your order status: ${status}`
+              ? "✅ Payment received! Your order is now being processed."
+              : `📦 Order status: ${status}`
           },
           action: {
             name: "shipment_update",
             parameters: {
               reference_id: referenceId,
-              order_status: status   // "processing" | "shipped" | "completed"
+              order_status: status
             }
           }
         }
       },
-      {
-        headers: {
-          Authorization: `Bearer ${TOKEN}`,
-          "Content-Type": "application/json"
-        }
-      }
+      { headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" } }
     );
   } catch (err) {
-    // Non-critical — log and continue
     console.error("Order status update error:", err.response?.data || err.message);
   }
 }
 
+
 // =========================
-// 🖼️ GET MEDIA URL (unchanged)
+// 🖼️ GET MEDIA URL
 // =========================
 async function getMediaUrl(mediaId) {
   try {
@@ -493,7 +457,7 @@ async function getMediaUrl(mediaId) {
       `https://graph.facebook.com/v25.0/${mediaId}`,
       { headers: { Authorization: `Bearer ${TOKEN}` } }
     );
-    const mediaUrl = response.data.url;
+    const mediaUrl      = response.data.url;
     const mediaResponse = await axios.get(mediaUrl, {
       headers: { Authorization: `Bearer ${TOKEN}` },
       responseType: "arraybuffer"
@@ -507,8 +471,9 @@ async function getMediaUrl(mediaId) {
   }
 }
 
+
 // =========================
-// ☁️ CLOUDINARY UPLOAD (unchanged)
+// ☁️ CLOUDINARY UPLOAD
 // =========================
 async function uploadToCloudinary(imageBuffer) {
   return new Promise((resolve, reject) => {
@@ -522,8 +487,9 @@ async function uploadToCloudinary(imageBuffer) {
   });
 }
 
+
 // =========================
-// 📤 SEND MESSAGE (unchanged)
+// 📤 SEND TEXT MESSAGE
 // =========================
 async function sendMessage(to, text) {
   try {
@@ -535,20 +501,16 @@ async function sendMessage(to, text) {
         type: "text",
         text: { body: text }
       },
-      {
-        headers: {
-          Authorization: `Bearer ${TOKEN}`,
-          "Content-Type": "application/json"
-        }
-      }
+      { headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("Send Error:", error.response?.data || error.message);
   }
 }
 
+
 // =========================
-// 💾 SAVE ORDER TO SHEET (unchanged)
+// 💾 SAVE ORDER TO SHEET
 // =========================
 async function saveOrder(data) {
   try {
@@ -557,19 +519,17 @@ async function saveOrder(data) {
       range: "Sheet1",
       valueInputOption: "USER_ENTERED",
       requestBody: {
-        values: [
-          [
-            data.orderId || "",
-            new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
-            data.phone || "",
-            data.product || "",
-            data.price || "",
-            data.address || "",
-            data.status || "",
-            data.screenshot || "",
-            data.raw || ""
-          ]
-        ]
+        values: [[
+          data.orderId    || "",
+          new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+          data.phone      || "",
+          data.product    || "",
+          data.price      || "",
+          data.address    || "",
+          data.status     || "",
+          data.screenshot || "",
+          data.raw        || ""
+        ]]
       }
     });
     console.log("✅ Order saved to sheet");
@@ -577,6 +537,7 @@ async function saveOrder(data) {
     console.error("Sheet error:", err.message);
   }
 }
+
 
 // 🚀 START SERVER
 const PORT = process.env.PORT || 3000;
