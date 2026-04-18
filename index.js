@@ -241,7 +241,7 @@ const orderId =
 
         await sendMessage(
           from,
-          "👋 Hey! Welcome to *Wipz* 💫\n\nWe bring you stylish & super-comfy women's sandals,\nperfect for daily wear + outings ✨\n\n🔥 Loved by 1000+ happy customers"
+          "👋 Hey! Welcome to *Wipz* 💫\n\nWe bring you stylish & super-comfy Women's Footwear,\nperfect for daily wear + outings ✨\n\n🔥 Loved by 1000+ happy customers.\n\n_Proudly Made in Maharashtra_"
         );
 
         await sendMessage(
