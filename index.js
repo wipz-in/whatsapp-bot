@@ -241,12 +241,12 @@ const orderId =
 
         await sendMessage(
           from,
-          "👋 Hey! Welcome to *Wipz* 💫\n\nWe bring you stylish & super-comfy women's sandals,\nperfect for daily wear + outings ✨\n\n🔥 Loved by 1000+ happy customers\n\n🛍️ Please select a product from the catalogue above."
+          "👋 Hey! Welcome to *Wipz* 💫\n\nWe bring you stylish & super-comfy women's sandals,\nperfect for daily wear + outings ✨\n\n🔥 Loved by 1000+ happy customers"
         );
 
         await sendMessage(
           from,
-          "😍 Let’s find your perfect pair!\n\n🛍️ Please select a product from the catalogue above.\n\n(Tap on catalogue button at top"
+          "😍 Let’s find your perfect pair!\n\n🛍️ *Please select a product from the catalogue above.*\n\n_(Tap on catalogue button at top)_"
         );
       }
 
