@@ -82,10 +82,10 @@ app.post("/webhook", async (req, res) => {
     const from = message.from;
     const type = message.type;
 
-    // ✅ SAVE CHAT
-    await saveChatLog({
-      phone: from,
-      let logMessage = message.text?.body || type;
+   // =========================
+// 📝 SAVE CHAT (FIXED)
+// =========================
+let logMessage = message.text?.body || type;
 
 // ✅ If it's an order → extract product name
 if (type === "order") {
@@ -93,14 +93,12 @@ if (type === "order") {
   logMessage = product?.product_retailer_id || "Order placed";
 }
 
+// ✅ Save chat log once
 await saveChatLog({
   phone: from,
   message: logMessage,
   step: userState[from]?.step || "new"
 });
-      step: userState[from]?.step || "new"
-    });
-
     console.log("Incoming:", JSON.stringify(message, null, 2));
 
     // INIT USER
@@ -281,7 +279,7 @@ async function getMediaUrl(mediaId) {
       `https://graph.facebook.com/v25.0/${mediaId}`,
       {
         headers: {
-          Authorization: `Bearer EAALcQJ0mJBABRGAIFmoAkgt8RNOOcfuYKxJEUssi5vDgaQvM3ZA8v0CvC9vZABISY6mkuoiZCz2ISMpdHZB1CFjyJdlCMA5QFddcuZCgMSRwr6HKljCJ7GytzFZCqYtU9vGDLvo22xusJfDH5RXzDxS1fDiFrXcZACtuXpu2Lo5bQFKGthKLvIzqaBFOJhqbG0q35Jk6WekdcnaRdT5Y63DgpHN1eV5WFCIZAZAJDrCIjFI0UM1GddKsfXOVPfztLuFtwTJWaDIjpl6u8DWakHqL0P2Fe`
+          Authorization: `Bearer ${TOKEN}`,
         }
       }
     );
@@ -291,7 +289,7 @@ async function getMediaUrl(mediaId) {
     // Step 2: Download image
     const mediaResponse = await axios.get(mediaUrl, {
       headers: {
-        Authorization: `Bearer EAALcQJ0mJBABRGAIFmoAkgt8RNOOcfuYKxJEUssi5vDgaQvM3ZA8v0CvC9vZABISY6mkuoiZCz2ISMpdHZB1CFjyJdlCMA5QFddcuZCgMSRwr6HKljCJ7GytzFZCqYtU9vGDLvo22xusJfDH5RXzDxS1fDiFrXcZACtuXpu2Lo5bQFKGthKLvIzqaBFOJhqbG0q35Jk6WekdcnaRdT5Y63DgpHN1eV5WFCIZAZAJDrCIjFI0UM1GddKsfXOVPfztLuFtwTJWaDIjpl6u8DWakHqL0P2Fe`
+        Authorization: `Bearer ${TOKEN}`,
       },
       responseType: "arraybuffer"
     });
@@ -326,7 +324,7 @@ async function uploadToCloudinary(imageBuffer) {
 async function sendMessage(to, text) {
   try {
     await axios.post(
-      `https://graph.facebook.com/v25.0/973822219157793/messages`,
+      `https://graph.facebook.com/v25.0/${PHONE_ID}/messages`,
       {
         messaging_product: "whatsapp",
         to,
@@ -335,7 +333,7 @@ async function sendMessage(to, text) {
       },
       {
         headers: {
-          Authorization: `Bearer EAALcQJ0mJBABRGAIFmoAkgt8RNOOcfuYKxJEUssi5vDgaQvM3ZA8v0CvC9vZABISY6mkuoiZCz2ISMpdHZB1CFjyJdlCMA5QFddcuZCgMSRwr6HKljCJ7GytzFZCqYtU9vGDLvo22xusJfDH5RXzDxS1fDiFrXcZACtuXpu2Lo5bQFKGthKLvIzqaBFOJhqbG0q35Jk6WekdcnaRdT5Y63DgpHN1eV5WFCIZAZAJDrCIjFI0UM1GddKsfXOVPfztLuFtwTJWaDIjpl6u8DWakHqL0P2Fe`,
+          Authorization: `Bearer ${TOKEN}`,
           "Content-Type": "application/json"
         }
       }
