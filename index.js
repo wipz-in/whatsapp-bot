@@ -223,7 +223,7 @@ const orderId =
 
   await sendMessage(
     from,
-    `✅ Thank you for the payment!\n\n🧾 Order ID: ${orderId}\n\nWe will confirm order shortly 🚚`
+    `✅ Thank you for the payment!\n\n🧾 Order ID: ${orderId}\n\nYour order is being processed 🚚\n\nYou’ll receive shipping updates soon\n\n💖 Thank you for shopping with Wipz!`
   );
 
   return res.sendStatus(200);
@@ -241,7 +241,12 @@ const orderId =
 
         await sendMessage(
           from,
-          "👋 Welcome!\n\n🛍️ Please select a product from the catalogue above."
+          "👋 Hey! Welcome to *Wipz* 💫\n\nWe bring you stylish & super-comfy women's sandals,\nperfect for daily wear + outings ✨\n\n🔥 Loved by 1000+ happy customers\n\n🛍️ Please select a product from the catalogue above."
+        );
+
+        await sendMessage(
+          from,
+          "😍 Let’s find your perfect pair!\n\n🛍️ Please select a product from the catalogue above.\n\n(Tap on catalogue button at top"
         );
       }
 
