@@ -85,7 +85,19 @@ app.post("/webhook", async (req, res) => {
     // ✅ SAVE CHAT
     await saveChatLog({
       phone: from,
-      message: message.text?.body || type,
+      let logMessage = message.text?.body || type;
+
+// ✅ If it's an order → extract product name
+if (type === "order") {
+  const product = message.order?.product_items?.[0];
+  logMessage = product?.product_retailer_id || "Order placed";
+}
+
+await saveChatLog({
+  phone: from,
+  message: logMessage,
+  step: userState[from]?.step || "new"
+});
       step: userState[from]?.step || "new"
     });
 
@@ -102,15 +114,38 @@ app.post("/webhook", async (req, res) => {
     if (type === "order") {
       const product = message.order?.product_items?.[0];
 
-      const price = product?.item_price || 0;
-      const name = product?.product_retailer_id || "Product";
+const price = product?.item_price || 0;
+const name = product?.product_retailer_id || "Product";
+const quantity = product?.quantity || 1;
+
+// ⚠️ Image (comes from catalog sometimes)
+const imageUrl = product?.image?.link || null;
 
       userOrders[from] = {
         price,
         name,
         status: "product_selected"
       };
-
+if (imageUrl) {
+  await axios.post(
+    `https://graph.facebook.com/v25.0/${PHONE_ID}/messages`,
+    {
+      messaging_product: "whatsapp",
+      to: from,
+      type: "image",
+      image: {
+        link: imageUrl,
+        caption: `🛍️ *${name}*\n\nQty: ${quantity}\nPrice: ₹${price}`
+      }
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${TOKEN}`,
+        "Content-Type": "application/json"
+      }
+    }
+  );
+}
       userState[from].step = "address";
 
       await sendMessage(
