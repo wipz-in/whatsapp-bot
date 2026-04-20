@@ -20,7 +20,7 @@ const SHEET_ID = "1eC8M6-9OpGlZ0G9r64i__sWoSW3o0hzxUp97Po4bJSk";
 
 const app = express();
 
-// ⚠️ Raw body needed for /flow-endpoint decryption
+// ⚠️ Raw body for /flow-endpoint
 app.use((req, res, next) => {
   if (req.path === "/flow-endpoint") {
     let raw = "";
@@ -46,7 +46,10 @@ const UPI_NAME            = process.env.UPI_NAME            || "Wipz";
 const PAYMENT_CONFIG_NAME = "whatsapp_orders";
 const ADDRESS_FLOW_ID     = process.env.ADDRESS_FLOW_ID     || "YOUR_FLOW_ID_HERE";
 const FLOW_PRIVATE_KEY    = process.env.FLOW_PRIVATE_KEY    || "";
-const START_MESSAGE_IMAGE_URL = process.env.START_MESSAGE_IMAGE_URL || "YOUR_IMAGE_URL_HERE";
+
+// ✅ Upload your video to Cloudinary and paste the URL here (or set in Render env)
+// Cloudinary → Media Library → Upload video → copy URL ending in .mp4
+const START_MESSAGE_VIDEO_URL = process.env.START_MESSAGE_VIDEO_URL || "YOUR_CLOUDINARY_VIDEO_URL_HERE";
 
 const userState  = {};
 const userOrders = {};
@@ -68,7 +71,6 @@ app.get("/webhook", (req, res) => {
 function decryptRequest(body) {
   const { encrypted_aes_key, encrypted_flow_data, initial_vector } = body;
 
-  // Decrypt AES key with RSA private key
   const decryptedAesKey = crypto.privateDecrypt(
     {
       key: FLOW_PRIVATE_KEY,
@@ -78,7 +80,6 @@ function decryptRequest(body) {
     Buffer.from(encrypted_aes_key, "base64")
   );
 
-  // Decrypt flow data with AES-128-GCM
   const flowDataBuffer = Buffer.from(encrypted_flow_data, "base64");
   const iv             = Buffer.from(initial_vector, "base64");
   const TAG_LENGTH     = 16;
@@ -92,8 +93,8 @@ function decryptRequest(body) {
     decipher.update(encryptedData, undefined, "utf8") + decipher.final("utf8");
 
   return {
-    decryptedBody:   JSON.parse(decryptedData),
-    aesKeyBuffer:    decryptedAesKey,
+    decryptedBody:       JSON.parse(decryptedData),
+    aesKeyBuffer:        decryptedAesKey,
     initialVectorBuffer: iv,
   };
 }
@@ -101,15 +102,10 @@ function decryptRequest(body) {
 
 // =========================
 // 🔒 ENCRYPT FLOW RESPONSE
-// Meta requires ALL responses from the endpoint to be
-// encrypted with AES-128-GCM and returned as Base64
 // =========================
 function encryptResponse(responseData, aesKeyBuffer, ivBuffer) {
-  // Flip the IV bits as required by Meta's spec
   const flippedIV = Buffer.alloc(ivBuffer.length);
-  for (let i = 0; i < ivBuffer.length; i++) {
-    flippedIV[i] = ~ivBuffer[i];
-  }
+  for (let i = 0; i < ivBuffer.length; i++) flippedIV[i] = ~ivBuffer[i];
 
   const cipher = crypto.createCipheriv("aes-128-gcm", aesKeyBuffer, flippedIV);
   const data   = JSON.stringify(responseData);
@@ -126,82 +122,55 @@ function encryptResponse(responseData, aesKeyBuffer, ivBuffer) {
 
 // =========================
 // 🔓 FLOW ENDPOINT
-// Handles encrypted requests from WhatsApp Flows
-// Health check: Meta sends ping → we respond with encrypted { status: "active" }
-// Form submit: Meta sends form data → we return encrypted completion response
 // =========================
 app.post("/flow-endpoint", async (req, res) => {
   try {
-    console.log("📋 Flow endpoint hit, raw body length:", req.rawBody?.length);
-
     const body = req.body;
 
-    // ── Unencrypted ping (shouldn't happen but handle it) ──────────────
     if (body?.action === "ping" && !body.encrypted_aes_key) {
-      console.log("✅ Unencrypted ping");
       return res.json({ data: { status: "active" } });
     }
 
-    // ── All real requests from Meta are encrypted ──────────────────────
     if (!body.encrypted_aes_key || !body.encrypted_flow_data) {
-      console.error("❌ Missing encrypted fields:", Object.keys(body));
       return res.status(421).send("Missing encryption fields");
     }
 
-    // Decrypt the incoming request
     let decryptedBody, aesKeyBuffer, initialVectorBuffer;
     try {
       ({ decryptedBody, aesKeyBuffer, initialVectorBuffer } = decryptRequest(body));
-      console.log("🔓 Decrypted:", JSON.stringify(decryptedBody, null, 2));
+      console.log("🔓 Flow decrypted:", JSON.stringify(decryptedBody, null, 2));
     } catch (err) {
-      console.error("❌ Decryption failed:", err.message);
-      // Meta requires 421 on decryption failure so it retries with new key
+      console.error("❌ Flow decryption failed:", err.message);
       return res.status(421).send("Decryption failed");
     }
 
-    const { action, screen, data, flow_token, version } = decryptedBody;
+    const { action, flow_token } = decryptedBody;
 
-    // ── HEALTH CHECK PING ──────────────────────────────────────────────
     if (action === "ping") {
-      console.log("✅ Health check ping — sending encrypted active response");
-      const encrypted = encryptResponse(
+      return res.send(encryptResponse(
         { data: { status: "active" } },
-        aesKeyBuffer,
-        initialVectorBuffer
-      );
-      return res.send(encrypted);
+        aesKeyBuffer, initialVectorBuffer
+      ));
     }
 
-    // ── INIT — customer opens the flow ────────────────────────────────
     if (action === "INIT") {
-      const encrypted = encryptResponse(
+      return res.send(encryptResponse(
         { screen: "ADDRESS", data: {} },
-        aesKeyBuffer,
-        initialVectorBuffer
-      );
-      return res.send(encrypted);
+        aesKeyBuffer, initialVectorBuffer
+      ));
     }
 
-    // ── DATA_EXCHANGE — intermediate screen interactions ───────────────
     if (action === "data_exchange") {
-      const encrypted = encryptResponse(
-        {
-          screen: "SUCCESS",
-          data: { extension_message_response: { params: { flow_token } } }
-        },
-        aesKeyBuffer,
-        initialVectorBuffer
-      );
-      return res.send(encrypted);
+      return res.send(encryptResponse(
+        { screen: "SUCCESS", data: { extension_message_response: { params: { flow_token } } } },
+        aesKeyBuffer, initialVectorBuffer
+      ));
     }
 
-    // Default fallback
-    const encrypted = encryptResponse(
+    return res.send(encryptResponse(
       { data: { status: "ok" } },
-      aesKeyBuffer,
-      initialVectorBuffer
-    );
-    return res.send(encrypted);
+      aesKeyBuffer, initialVectorBuffer
+    ));
 
   } catch (err) {
     console.error("Flow endpoint error:", err.message);
@@ -230,37 +199,52 @@ async function saveChatLog(data) {
 
 // =========================
 // 🎬 SEND WELCOME TEMPLATES
+//
+// NEW CUSTOMERS  → start_message (video) + intro_catalog
+// OLD CUSTOMERS  → intro_catalog only (they've seen the intro)
 // =========================
-async function sendWelcomeTemplates(to) {
-  // Template 1: start_message (image header)
-  try {
-    await axios.post(
-      `https://graph.facebook.com/v25.0/${PHONE_ID}/messages`,
-      {
-        messaging_product: "whatsapp",
-        to,
-        type: "template",
-        template: {
-          name: "start_message",
-          language: { code: "en" },
-          components: [
-            {
-              type: "header",
-              parameters: [{ type: "image", image: { link: START_MESSAGE_IMAGE_URL } }]
-            }
-          ]
-        }
-      },
-      { headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" } }
-    );
-    console.log("✅ start_message sent");
-  } catch (err) {
-    console.error("start_message error:", JSON.stringify(err.response?.data, null, 2));
+async function sendWelcomeTemplates(to, isNewCustomer) {
+
+  // ── Template 1: start_message — only for NEW customers ───────────────
+  if (isNewCustomer) {
+    try {
+      await axios.post(
+        `https://graph.facebook.com/v25.0/${PHONE_ID}/messages`,
+        {
+          messaging_product: "whatsapp",
+          to,
+          type: "template",
+          template: {
+            name: "start_message",
+            language: { code: "en" },
+            components: [
+              {
+                // ✅ VIDEO header — WhatsApp requires the video link at send time
+                // even though the template was created with a video in Manager
+                type: "header",
+                parameters: [
+                  {
+                    type: "video",
+                    video: { link: START_MESSAGE_VIDEO_URL }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        { headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" } }
+      );
+      console.log("✅ start_message (video) sent");
+    } catch (err) {
+      console.error("start_message error:", JSON.stringify(err.response?.data, null, 2));
+      // Don't block — still send catalog even if video fails
+    }
+
+    // Small delay so messages arrive in correct order
+    await new Promise(r => setTimeout(r, 1500));
   }
 
-  await new Promise(r => setTimeout(r, 1200));
-
-  // Template 2: intro_catalog (catalog button)
+  // ── Template 2: intro_catalog — for ALL customers ────────────────────
   try {
     await axios.post(
       `https://graph.facebook.com/v25.0/${PHONE_ID}/messages`,
@@ -325,11 +309,11 @@ async function sendAddressFlow(to) {
       },
       { headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" } }
     );
-    console.log("✅ Address flow sent to", to);
+    console.log("✅ Address flow sent");
   } catch (err) {
     console.error("Address flow error:", JSON.stringify(err.response?.data, null, 2));
     await sendMessage(to,
-      "📦 Please send your delivery details:\n\nName:\nAddress:\nCity:\nPincode:"
+      "📦 Please send your delivery details:\n\nName:\nPhone:\nHouse No & Name:\nArea, Street:\nLandmark:\nCity:\nPincode:"
     );
   }
 }
@@ -450,7 +434,9 @@ app.post("/webhook", async (req, res) => {
           raw:        JSON.stringify(paymentInfo)
         });
 
-        userState[from] = { step: "done", seenWelcome: true };
+        // Mark as returning customer — they've completed a purchase
+        userState[from] = { step: "done", seenWelcome: true, isReturning: true };
+
         await sendMessage(from,
           `✅ *Payment Confirmed!*\n\n🧾 Order ID: *${referenceId}*\n💰 Amount: ₹${amount}\n🔖 UTR: ${txnId}\n\nYour order is being processed 🚚\n\n💖 Thank you for shopping with *Wipz*!`
         );
@@ -466,23 +452,20 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // ── FLOW COMPLETION (nfm_reply) ────────────────────────────────────
-    // Fires when customer submits the address form
+    // ── FLOW COMPLETION (address submitted) ────────────────────────────
     if (incomingMsg?.type === "interactive" &&
         incomingMsg?.interactive?.type === "nfm_reply") {
 
       const from     = incomingMsg.from;
       const nfmReply = incomingMsg.interactive.nfm_reply;
-      console.log("📋 Flow nfm_reply raw:", JSON.stringify(nfmReply, null, 2));
+      console.log("📋 nfm_reply:", JSON.stringify(nfmReply, null, 2));
 
       let formData = {};
-      try {
-        formData = JSON.parse(nfmReply.response_json || "{}");
-      } catch { formData = {}; }
+      try { formData = JSON.parse(nfmReply.response_json || "{}"); } catch {}
 
-      console.log("📦 Parsed form data:", JSON.stringify(formData, null, 2));
+      console.log("📦 Form data:", JSON.stringify(formData, null, 2));
 
-      // ✅ Map exact field names from your Flow JSON
+      // ✅ Exact field names from your Flow JSON
       const full_name      = formData.full_name      || "";
       const phone_         = formData.phone          || "";
       const address_line_1 = formData.address_line_1 || "";
@@ -491,7 +474,6 @@ app.post("/webhook", async (req, res) => {
       const city           = formData.city           || "";
       const pincode        = formData.pincode        || "";
 
-      // Build full address string for the sheet
       const fullAddress = [
         full_name,
         phone_ ? `Ph: ${phone_}` : "",
@@ -502,7 +484,7 @@ app.post("/webhook", async (req, res) => {
         pincode
       ].filter(Boolean).join(", ");
 
-      console.log("✅ Full address:", fullAddress);
+      console.log("✅ Address:", fullAddress);
 
       if (!userOrders[from]) userOrders[from] = { items: [] };
       userOrders[from].address = fullAddress;
@@ -513,7 +495,6 @@ app.post("/webhook", async (req, res) => {
         return res.sendStatus(200);
       }
 
-      // Generate Order ID
       const now     = new Date();
       const orderId =
         "ORD" +
@@ -524,7 +505,6 @@ app.post("/webhook", async (req, res) => {
       userState[from].step     = "payment";
 
       const summary = buildOrderSummary(userOrders[from].items);
-
       await sendMessage(from, "🎉 Almost there! Here's your order summary 👇");
       const result = await sendUpiPaymentMessage(from, { ...summary, orderId });
 
@@ -543,7 +523,10 @@ app.post("/webhook", async (req, res) => {
     const from = message.from;
     const type = message.type;
 
-    if (!userState[from]) userState[from] = { step: "idle", seenWelcome: false };
+    // Init user state
+    if (!userState[from]) {
+      userState[from] = { step: "idle", seenWelcome: false, isReturning: false };
+    }
 
     let logMessage = message.text?.body || type;
     if (type === "order") {
@@ -553,12 +536,40 @@ app.post("/webhook", async (req, res) => {
     await saveChatLog({ phone: from, message: logMessage, step: userState[from]?.step });
     console.log("Incoming:", JSON.stringify(message, null, 2));
 
-    // ── FIRST-TIME VISITOR ─────────────────────────────────────────────
+    // ── FIRST MESSAGE from this customer ───────────────────────────────
+    // seenWelcome = false  → brand new customer → show video + catalog
+    // seenWelcome = true   → returning customer → show catalog only
     if (!userState[from].seenWelcome) {
+      // First time ever
       userState[from].seenWelcome = true;
+      userState[from].isReturning = false;
       userState[from].step        = "idle";
-      await sendWelcomeTemplates(from);
+      await sendWelcomeTemplates(from, true);   // true = new customer
       if (type !== "order") return res.sendStatus(200);
+    }
+
+    // ── TEXT "hi/hello" from returning customer ────────────────────────
+    if (type === "text") {
+      const text = message.text.body.toLowerCase().trim();
+
+      if (["hi", "hello", "start", "hey"].includes(text)) {
+        // Reset cart but keep seenWelcome = true
+        userState[from].step = "idle";
+        userOrders[from]     = null;
+
+        // ✅ Returning customers get catalog template (not plain text)
+        await sendWelcomeTemplates(from, false);  // false = returning, skip video
+        return res.sendStatus(200);
+      }
+
+      if (userState[from]?.step === "payment") {
+        await sendMessage(from, "💳 Please tap *Review & Pay* above to complete your payment 👆");
+      } else if (userState[from]?.step === "awaiting_address_flow") {
+        await sendMessage(from, "📋 Please fill in the delivery form above 👆");
+      } else {
+        await sendMessage(from, "👉 Please select a product from catalogue to continue 🛍️");
+      }
+      return res.sendStatus(200);
     }
 
     // ── ORDER FROM CATALOG ─────────────────────────────────────────────
@@ -623,29 +634,9 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // ── TEXT FALLBACK ──────────────────────────────────────────────────
-    if (type === "text") {
-      const text = message.text.body.toLowerCase().trim();
-
-      if (["hi", "hello", "start", "hey"].includes(text)) {
-        userState[from]  = { step: "idle", seenWelcome: true };
-        userOrders[from] = null;
-        await sendMessage(from,
-          "👋 Welcome back to *Wipz*! 💫\n\n😍 Browse our catalogue and pick your favourite pair 👟\n\n_(Tap the catalogue button to shop)_"
-        );
-      } else if (userState[from]?.step === "payment") {
-        await sendMessage(from, "💳 Please tap *Review & Pay* above to complete your payment 👆");
-      } else if (userState[from]?.step === "awaiting_address_flow") {
-        await sendMessage(from, "📋 Please fill in the delivery form above 👆");
-      } else {
-        await sendMessage(from, "👉 Please select a product from catalogue to continue 🛍️");
-      }
-      return res.sendStatus(200);
-    }
-
     // ── SCREENSHOT FALLBACK ────────────────────────────────────────────
     if (type === "image" && userState[from]?.step === "payment") {
-      const imageUrl = await getMediaUrl(message.image.id);
+      const imageUrl   = await getMediaUrl(message.image.id);
       userOrders[from].status = "payment_screenshot_sent";
       userState[from].step    = "done";
 
@@ -756,7 +747,7 @@ async function saveOrder(data) {
         data.phone      || "",
         data.product    || "",
         data.price      || "",
-        data.address    || "",   // ✅ Full address from Flow saved here
+        data.address    || "",   // ✅ Full address from Flow
         data.status     || "",
         data.screenshot || "",
         data.raw        || ""
