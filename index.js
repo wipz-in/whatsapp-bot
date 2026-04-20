@@ -195,7 +195,7 @@ async function sendWelcomeTemplates(to) {
     console.log("start_message sent");
   } catch (err) {
     console.error("start_message error:", JSON.stringify(err.response && err.response.data, null, 2));
-    await sendMessage(to, "👋 Welcome to *Wipz* 💫\n\nStylish & super-comfy Women's Footwear ✨\n🔥 Loved by 1000+ happy customers.\n_Proudly Made in Maharashtra_ 🇮🇳");
+    await sendMessage(to, "👋 Welcome to *Wipz* 💫\n\nStylish & super-comfy Women's Footwear ✨\n🔥 Loved by 100000+ happy customers.\n_Proudly Made in Maharashtra_ 🇮🇳");
   }
 
   await new Promise(r => setTimeout(r, 1200));
