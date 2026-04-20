@@ -379,10 +379,10 @@ async function sendUpiPaymentMessage(to, orderDetails) {
       amount:      item.amount,
       quantity:    item.quantity,
       country_of_origin: "India",
-      importer_name:     "Wipz Footcare Industries",
+      importer_name:     "Wipz Footcare Industries Pvt. Ltd.",
       importer_address:  {
         address_line1: "SR. NO. 1018, Karjat Road",
-        city:          "Jamkhed",
+        city:          "Jamkhed, Ahilyanagar",
         zone_code:     "MH",
         postal_code:   "413201",
         country_code:  "IN"
