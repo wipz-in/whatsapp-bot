@@ -39,6 +39,7 @@ const PHONE_ID            = process.env.PHONE_NUMBER_ID;
 const TOKEN               = process.env.ACCESS_TOKEN;
 const UPI_VPA             = process.env.UPI_VPA             || "9657748074-3@ibl";
 const UPI_NAME            = process.env.UPI_NAME            || "Wipz";
+const UPI_MCC             = "5661";
 const PAYMENT_CONFIG_NAME = "whatsapp_orders";
 const ADDRESS_FLOW_ID     = process.env.ADDRESS_FLOW_ID     || "YOUR_FLOW_ID_HERE";
 const FLOW_PRIVATE_KEY    = process.env.FLOW_PRIVATE_KEY    || "";
@@ -225,30 +226,63 @@ async function sendAddressFlow(to) {
 async function sendUpiPaymentMessage(to, orderDetails) {
   const { totalPrice, lineItems, itemsSummary, orderId } = orderDetails;
   const amountInPaise = Math.round(totalPrice * 100);
-  try {
-    await axios.post(`https://graph.facebook.com/v25.0/${PHONE_ID}/messages`, {
-      messaging_product: "whatsapp", recipient_type: "individual", to, type: "interactive",
-      interactive: {
-        type: "order_details",
-        body:   { text: `Here's your order summary 🛍️\n\n${itemsSummary}\n\nTap *Review & Pay* to complete payment via UPI ✅` },
-        footer: { text: "Wipz — Loved by 1000+ customers 💖" },
-        action: {
-          name: "review_and_pay",
-          parameters: {
-            reference_id: orderId, type: "digital-goods",
-            payment_type: "upi", payment_configuration: PAYMENT_CONFIG_NAME,
-            currency: "INR", total_amount: { value: amountInPaise, offset: 100 },
-            order: {
-              status: "pending", items: lineItems,
-              subtotal: { value: amountInPaise, offset: 100 },
-              tax:      { value: 0, offset: 100, description: "GST Inclusive" },
-              shipping: { value: 0, offset: 100, description: "Free Delivery" },
-              discount: { value: 0, offset: 100, description: "" }
+
+  // ✅ Build proper UPI intent link with MCC
+  // mc=5661 is for shoe/footwear stores — confirm your MCC with your bank
+  const upiIntentLink =
+    `upi://pay?pa=${UPI_VPA}&pn=${encodeURIComponent(UPI_NAME)}` +
+    `&mc=${UPI_MCC}&tr=${orderId}&am=${totalPrice}` +
+    `&cu=INR&purpose=00&mode=00`;
+
+  const payload = {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to,
+    type: "interactive",
+    interactive: {
+      type: "order_details",
+      body: {
+        text: `Here's your order summary 🛍️\n\n${itemsSummary}\n\nTap *Review & Pay* to complete payment via UPI ✅`
+      },
+      footer: { text: "Wipz — Loved by 1000+ customers 💖" },
+      action: {
+        name: "review_and_pay",
+        parameters: {
+          reference_id: orderId,
+          type: "physical-goods",        // ✅ changed to physical-goods for footwear
+          payment_settings: [            // ✅ NEW structure — payment_settings array
+            {
+              type: "upi_intent_link",
+              upi_intent_link: {
+                link: upiIntentLink      // ✅ full UPI intent with mc code
+              }
             }
+          ],
+          currency: "INR",
+          total_amount: { value: amountInPaise, offset: 100 },
+          order: {
+            status: "pending",
+            items: lineItems.map(item => ({
+              ...item,
+              country_of_origin: "India",          // ✅ required for physical-goods
+              importer_name: "Wipz Footcare Industries",
+              importer_address: {
+                address_line1: "Maharashtra",
+                city: "Pune",
+                zone_code: "MH",
+                postal_code: "411001",
+                country_code: "IN"
+              }
+            })),
+            subtotal: { value: amountInPaise, offset: 100 },
+            tax:      { value: 0, offset: 100, description: "GST Inclusive" },
+            shipping: { value: 0, offset: 100, description: "Free Delivery" },
+            discount: { value: 0, offset: 100, description: "" }
           }
         }
       }
-    }, { headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" } });
+    }
+  }; { headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" } });
     console.log("Payment message sent");
     return { success: true };
   } catch (error) {
