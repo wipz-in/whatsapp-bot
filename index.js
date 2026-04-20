@@ -343,6 +343,27 @@ app.post("/webhook", async (req, res) => {
         formData.pincode        || ""
       ].filter(Boolean).join(", ");
       console.log("Address:", fullAddress);
+      // ✅ Save address instantly to Logs sheet
+await saveChatLog({
+  phone:   from,
+  message: `ADDRESS FORM: ${fullAddress}`,
+  step:    "address_submitted"
+});
+
+      // ✅ Also save partial order record to Sheet1 immediately
+// so address is captured even if payment doesn't happen
+await saveOrder({
+  orderId:    `ADDR-${from}-${Date.now()}`,
+  phone:      from,
+  product:    (userOrders[from]?.items || []).map(i => `${i.name} x${i.quantity}`).join(", "),
+  price:      (userOrders[from]?.items || []).reduce((s, i) => s + i.price * i.quantity, 0),
+  address:    fullAddress,
+  status:     "Address submitted — awaiting payment",
+  screenshot: "",
+  raw:        JSON.stringify(formData)
+});
+
+      
       if (!userOrders[from]) userOrders[from] = { items: [] };
       userOrders[from].address = fullAddress;
       if (!userOrders[from].items || userOrders[from].items.length === 0) {
