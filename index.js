@@ -359,6 +359,79 @@ async function sendUpiPaymentMessage(to, orderDetails) {
 
   const amountInPaise = Math.round(totalPrice * 100);
 
+const QRCode = require("qrcode");
+
+async function sendPaymentQR(to, orderDetails) {
+  const { totalPrice, itemsSummary, orderId } = orderDetails;
+
+  // Build UPI deep link with amount pre-filled
+  // Customer scans this → amount is auto-filled in their UPI app
+  const upiString =
+    "upi://pay?pa=" + UPI_VPA +
+    "&pn=" + encodeURIComponent(UPI_NAME) +
+    "&am=" + totalPrice +
+    "&cu=INR" +
+    "&tn=" + encodeURIComponent("Order " + orderId);
+
+  // Generate QR as PNG buffer
+  const qrBuffer = await QRCode.toBuffer(upiString, {
+    type:              "png",
+    width:             512,
+    margin:            2,
+    color: {
+      dark:  "#000000",
+      light: "#FFFFFF"
+    }
+  });
+
+  // Upload QR image to Cloudinary
+  const qrImageUrl = await uploadToCloudinary(qrBuffer);
+
+  // Send QR image with instructions
+  try {
+    await axios.post(
+      "https://graph.facebook.com/v25.0/" + PHONE_ID + "/messages",
+      {
+        messaging_product: "whatsapp",
+        to: to,
+        type: "image",
+        image: {
+          link:    qrImageUrl,
+          caption:
+            "💳 *Scan to Pay*\n\n" +
+            itemsSummary + "\n\n" +
+            "📌 *Order ID:* " + orderId + "\n" +
+            "💰 *Amount: ₹" + totalPrice + "*\n\n" +
+            "1️⃣ Open any UPI app (GPay, PhonePe, Paytm)\n" +
+            "2️⃣ Tap *Scan QR* and scan above\n" +
+            "3️⃣ Amount ₹" + totalPrice + " is pre-filled\n" +
+            "4️⃣ Enter your UPI PIN and pay\n" +
+            "5️⃣ *Send screenshot here after payment* 📸"
+        }
+      },
+      { headers: { Authorization: "Bearer " + TOKEN, "Content-Type": "application/json" } }
+    );
+
+    // Also send UPI number as backup
+    await new Promise(r => setTimeout(r, 800));
+    await sendMessage(to,
+      "Or pay directly to:\n\n" +
+      "📱 *UPI ID:* " + UPI_VPA + "\n" +
+      "📱 *Mobile:* +" + SUPPORT_PHONE + "\n" +
+      "💰 *Amount: ₹" + totalPrice + "*\n" +
+      "📝 *Note/Ref:* " + orderId + "\n\n" +
+      "_After payment, send screenshot here 📸_"
+    );
+
+    console.log("QR payment message sent to", to);
+    return { success: true };
+
+  } catch (err) {
+    console.error("QR send error:", err.response && err.response.data || err.message);
+    return { success: false };
+  }
+}
+  
   // Build proper UPI intent link with Merchant Category Code
   // mc (MCC) tells UPI apps this is a verified merchant — prevents "Request Restricted"
   const upiIntentLink =
@@ -676,12 +749,11 @@ app.post("/webhook", async (req, res) => {
 
       await sendMessage(from, "🎉 Almost there! Here's your order summary 👇");
 
-      var result = await sendUpiPaymentMessage(from, {
-        totalPrice:   summary.totalPrice,
-        lineItems:    summary.lineItems,
-        itemsSummary: summary.itemsSummary,
-        orderId:      orderId
-      });
+      var result = await sendPaymentQR(from, {
+  totalPrice:   summary.totalPrice,
+  itemsSummary: summary.itemsSummary,
+  orderId:      orderId
+});
 
       if (!result.success) {
         await sendMessage(from,
