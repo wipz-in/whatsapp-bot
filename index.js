@@ -448,8 +448,6 @@ async function sendUpiPaymentMessage(to, orderDetails) {
 
 // QRcode function
 
-const QRCode = require("qrcode");
-
 async function sendPaymentQR(to, orderDetails) {
   const { totalPrice, itemsSummary, orderId } = orderDetails;
 
