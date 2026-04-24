@@ -277,45 +277,6 @@ async function sendPaymentQR(to, orderDetails) {
     "&cu=INR" +
     "&tn=" + encodeURIComponent("Order " + orderId);
 
-  // ── STEP 1: Send CTA button that opens UPI directly ────────────────
-  // This is the PRIMARY payment method — customer taps button, UPI app opens
-  try {
-    await axios.post(
-      "https://graph.facebook.com/v25.0/" + PHONE_ID + "/messages",
-      {
-        messaging_product: "whatsapp",
-        recipient_type: "individual",
-        to: to,
-        type: "interactive",
-        interactive: {
-          type: "cta_url",
-          body: {
-            text:
-              "💳 *Payment Details*\n\n" +
-              itemsSummary + "\n\n" +
-              "📌 Order ID: *" + orderId + "*\n" +
-              "💰 Amount: *₹" + totalPrice + "*\n\n" +
-              "Tap the button below to pay instantly 👇\n" +
-              "_Amount is pre-filled — just enter your UPI PIN_"
-          },
-          footer: { text: "Wipz — Safe & Secure Payment 🔒" },
-          action: {
-            name: "cta_url",
-            parameters: {
-              display_text: "Pay ₹" + totalPrice + " Now",
-              url: upiLink
-            }
-          }
-        }
-      },
-      { headers: { Authorization: "Bearer " + TOKEN, "Content-Type": "application/json" } }
-    );
-    console.log("CTA payment button sent");
-  } catch(err) {
-    console.error("CTA button error:", err.response && err.response.data || err.message);
-  }
-
-  await new Promise(function(r) { setTimeout(r, 800); });
 
   // ── STEP 2: Send QR as downloadable DOCUMENT ──────────────────────
   // Customer downloads the file → opens in gallery → scans with UPI app
