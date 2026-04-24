@@ -2,7 +2,7 @@ const express    = require("express");
 const bodyParser = require("body-parser");
 const axios      = require("axios");
 const crypto     = require("crypto");
-const cloudinary = require("cloudinary").v2;\
+const cloudinary = require("cloudinary").v2;
 const QRCode = require("qrcode");
 
 cloudinary.config({
