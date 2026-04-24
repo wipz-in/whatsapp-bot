@@ -3,6 +3,7 @@ const bodyParser = require("body-parser");
 const axios      = require("axios");
 const crypto     = require("crypto");
 const cloudinary = require("cloudinary").v2;
+const QRCode = require("qrcode");
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
