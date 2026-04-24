@@ -8,6 +8,6 @@
     "axios": "^1.6.0",
     "googleapis": "^132.0.0",
     "cloudinary": "^1.41.0",
-    "qrcode": "^1.5.3"
+    "qrcode": "^1.5.4"
   }
 }
