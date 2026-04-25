@@ -374,7 +374,7 @@ async function sendWelcomeTemplates(to) {
         messaging_product: "whatsapp", to: to, type: "template",
         template: {
           name: "start_message", language: { code: "en" },
-          components: [{ type: "header", parameters: [{ type: "video", video: { link: START_MESSAGE_VIDEO_URL } }] }]
+          components: [{ type: "header", parameters: [{ type: "image", image: { link: START_MESSAGE_VIDEO_URL } }] }]
         }
       },
       { headers: { Authorization: "Bearer " + TOKEN, "Content-Type": "application/json" } }
