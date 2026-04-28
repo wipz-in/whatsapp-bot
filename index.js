@@ -48,14 +48,15 @@ const ADDRESS_FLOW_ID         = process.env.ADDRESS_FLOW_ID         || "YOUR_FLO
 const FLOW_PRIVATE_KEY        = process.env.FLOW_PRIVATE_KEY        || "";
 const START_MESSAGE_VIDEO_URL = process.env.START_MESSAGE_VIDEO_URL || "YOUR_VIDEO_URL_HERE";
 
-// Promo codes — only offered to specific pincodes
-// PROMO_PINCODES: customers from these pincodes get the promo offer automatically
-// All other pincodes go straight to payment with no promo mention at all
+// Razorpay payment configuration name — exact name from WhatsApp Manager
+const RAZORPAY_PAYMENT_CONFIG = "razorpay";
+
+// Promo codes — only offered to PROMO_PINCODES, others go straight to payment
 const PROMO_CODES = {
   "JAMKHED10": { discount: 10, type: "percent", description: "10% off for Jamkhed customers" }
 };
-const PROMO_PINCODES     = ["413201"];   // add more pincodes here later if needed
-const PINCODE_PROMO_CODE = "JAMKHED10"; // code offered to above pincodes
+const PROMO_PINCODES     = ["413201"];
+const PINCODE_PROMO_CODE = "JAMKHED10";
 
 const userState      = {};
 const userOrders     = {};
@@ -159,6 +160,9 @@ async function saveChatLog(data) {
   } catch(err) { console.error("Chat log error:", err.message); }
 }
 
+// Sheet1 columns:
+// A: Order ID | B: Date | C: Phone | D: Product | E: Price
+// F: Address  | G: Email | H: Status | I: Screenshot/TXN | J: Raw
 async function saveOrder(data) {
   try {
     await sheets.spreadsheets.values.append({
@@ -166,12 +170,13 @@ async function saveOrder(data) {
       range: "Sheet1",
       valueInputOption: "USER_ENTERED",
       requestBody: { values: [[
-        data.orderId || "",
+        data.orderId    || "",
         new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
         data.phone      || "",
         data.product    || "",
         data.price      || "",
         data.address    || "",
+        data.email      || "",   // ✅ new email column G
         data.status     || "",
         data.screenshot || "",
         data.raw        || ""
@@ -257,12 +262,113 @@ function applyPromoCode(items, code) {
 
 
 // =========================
-// SEND PAYMENT QR
-// 1. CTA button — opens UPI app directly with amount pre-filled
-// 2. QR as downloadable document — customer saves and scans
-// 3. Plain text backup — UPI ID + amount + order ref
+// SEND RAZORPAY PAYMENT MESSAGE
+//
+// Uses native WhatsApp order_details interactive message
+// with payment_configuration: "razorpay" (Active in WhatsApp Manager)
+// Meta routes payment through Razorpay — no Razorpay API keys needed
+// Customer pays inside WhatsApp via UPI/Card/Netbanking/Wallet
+// Confirmation comes back as payment_info webhook to /webhook
+//
+// Fallback: if Razorpay message fails, sends QR code + UPI details
 // =========================
-async function sendPaymentQR(to, orderDetails) {
+async function sendPaymentMessage(to, orderDetails) {
+  var totalPrice    = orderDetails.totalPrice;
+  var lineItems     = orderDetails.lineItems;
+  var itemsSummary  = orderDetails.itemsSummary;
+  var orderId       = orderDetails.orderId;
+  var discountAmt   = orderDetails.discountAmount || 0;
+
+  var amountInPaise = Math.round(totalPrice * 100);
+
+  // Build items with physical-goods fields required by Meta
+  var itemsWithDetails = lineItems.map(function(item) {
+    return {
+      retailer_id:       item.retailer_id,
+      name:              item.name,
+      amount:            item.amount,
+      quantity:          item.quantity,
+      country_of_origin: "India",
+      importer_name:     "Wipz Footcare Industries",
+      importer_address:  {
+        address_line1: "SR. NO. 1018, Karjat Road",
+        city:          "Jamkhed, Ahilyanagar",
+        zone_code:     "MH",
+        postal_code:   "413201",
+        country_code:  "IN"
+      }
+    };
+  });
+
+  var payload = {
+    messaging_product: "whatsapp",
+    recipient_type:    "individual",
+    to:                to,
+    type:              "interactive",
+    interactive: {
+      type: "order_details",
+      body: {
+        text:
+          "Here's your order summary 🛍️\n\n" +
+          itemsSummary +
+          "\n\nTap *Review & Pay* to complete payment ✅"
+      },
+      footer: { text: "Wipz — Secure payment via Razorpay 🔒" },
+      action: {
+        name: "review_and_pay",
+        parameters: {
+          reference_id:          orderId,
+          type:                  "physical-goods",
+          payment_type:          "razorpay",           // ✅ Razorpay config
+          payment_configuration: RAZORPAY_PAYMENT_CONFIG, // "razorpay"
+          currency:              "INR",
+          total_amount:          { value: amountInPaise, offset: 100 },
+          order: {
+            status:   "pending",
+            items:    itemsWithDetails,
+            subtotal: { value: amountInPaise + Math.round(discountAmt * 100), offset: 100 },
+            tax:      { value: 0, offset: 100, description: "GST Inclusive" },
+            shipping: { value: 0, offset: 100, description: "Free Delivery" },
+            discount: {
+              value:       Math.round(discountAmt * 100),
+              offset:      100,
+              description: discountAmt > 0 ? "Promo discount applied" : ""
+            }
+          }
+        }
+      }
+    }
+  };
+
+  console.log("Sending Razorpay payment message for order:", orderId);
+
+  try {
+    await axios.post(
+      "https://graph.facebook.com/v25.0/" + PHONE_ID + "/messages",
+      payload,
+      { headers: { Authorization: "Bearer " + TOKEN, "Content-Type": "application/json" } }
+    );
+    console.log("✅ Razorpay payment message sent for:", orderId);
+    return { success: true };
+
+  } catch(error) {
+    var errData = error.response && error.response.data;
+    console.error("❌ Razorpay payment message failed:", JSON.stringify(errData, null, 2));
+
+    // ── FALLBACK: QR code + UPI details ───────────────────────────
+    console.log("Falling back to QR payment for:", orderId);
+    await sendFallbackQR(to, { totalPrice: totalPrice, itemsSummary: itemsSummary, orderId: orderId });
+    return { success: false, fallback: true };
+  }
+}
+
+
+// =========================
+// FALLBACK QR PAYMENT
+// Used only if Razorpay order_details message fails
+// Sends: CTA button + downloadable QR document + plain UPI text
+// =========================
+async function sendFallbackQR(to, orderDetails) {
   var totalPrice   = orderDetails.totalPrice;
   var itemsSummary = orderDetails.itemsSummary;
   var orderId      = orderDetails.orderId;
@@ -274,7 +380,7 @@ async function sendPaymentQR(to, orderDetails) {
     "&cu=INR" +
     "&tn=" + encodeURIComponent("Order " + orderId);
 
-  // Part 1: CTA button — tap to open UPI app directly
+  // CTA button
   try {
     await axios.post(
       "https://graph.facebook.com/v25.0/" + PHONE_ID + "/messages",
@@ -291,8 +397,7 @@ async function sendPaymentQR(to, orderDetails) {
               itemsSummary + "\n\n" +
               "📌 Order ID: *" + orderId + "*\n" +
               "💰 Amount: *₹" + totalPrice + "*\n\n" +
-              "Tap the button below to pay instantly 👇\n" +
-              "_Amount is pre-filled — just enter your UPI PIN_"
+              "Tap below to pay via UPI 👇"
           },
           footer: { text: "Wipz — Safe & Secure Payment 🔒" },
           action: {
@@ -306,14 +411,13 @@ async function sendPaymentQR(to, orderDetails) {
       },
       { headers: { Authorization: "Bearer " + TOKEN, "Content-Type": "application/json" } }
     );
-    console.log("CTA payment button sent");
   } catch(err) {
     console.error("CTA button error:", err.response && err.response.data || err.message);
   }
 
   await new Promise(function(r) { setTimeout(r, 800); });
 
-  // Part 2: QR as downloadable document
+  // QR as downloadable document
   try {
     var qrBuffer = await QRCode.toBuffer(upiLink, {
       type: "png", width: 600, margin: 3,
@@ -340,33 +444,27 @@ async function sendPaymentQR(to, orderDetails) {
       },
       { headers: { Authorization: "Bearer " + TOKEN, "Content-Type": "application/json" } }
     );
-    console.log("QR document sent");
   } catch(err) {
     console.error("QR document error:", err.response && err.response.data || err.message);
   }
 
   await new Promise(function(r) { setTimeout(r, 600); });
 
-  // Part 3: Plain text backup
   await sendMessage(to,
     "🔁 *Or pay manually:*\n\n" +
     "UPI ID: *" + UPI_VPA + "*\n" +
     "Amount: *₹" + totalPrice + "*\n" +
     "Ref/Note: *" + orderId + "*\n\n" +
     "After payment, *send screenshot here* 📸\n" +
-    "_Please send the exact amount shown_"
+    "_Please send the exact amount_"
   );
-
-  return { success: true };
 }
 
 
 // =========================
 // SEND WELCOME TEMPLATES
-// Sent to ALL customers on first contact
 // =========================
 async function sendWelcomeTemplates(to) {
-  // Template 1: start_message (video)
   try {
     await axios.post(
       "https://graph.facebook.com/v25.0/" + PHONE_ID + "/messages",
@@ -374,7 +472,7 @@ async function sendWelcomeTemplates(to) {
         messaging_product: "whatsapp", to: to, type: "template",
         template: {
           name: "start_message", language: { code: "en" },
-          components: [{ type: "header", parameters: [{ type: "image", image: { link: START_MESSAGE_VIDEO_URL } }] }]
+          components: [{ type: "header", parameters: [{ type: "video", video: { link: START_MESSAGE_VIDEO_URL } }] }]
         }
       },
       { headers: { Authorization: "Bearer " + TOKEN, "Content-Type": "application/json" } }
@@ -387,7 +485,6 @@ async function sendWelcomeTemplates(to) {
 
   await new Promise(function(r) { setTimeout(r, 1200); });
 
-  // Template 2: intro_catalog (catalog button)
   try {
     await axios.post(
       "https://graph.facebook.com/v25.0/" + PHONE_ID + "/messages",
@@ -409,8 +506,8 @@ async function sendWelcomeTemplates(to) {
 
 
 // =========================
-// SEND CATALOG TEMPLATE ONLY
-// Used when returning customer taps "Shop Again"
+// CATALOG TEMPLATE ONLY
+// For returning customers who tap "Shop Again"
 // =========================
 async function sendCatalogTemplate(to) {
   try {
@@ -426,7 +523,6 @@ async function sendCatalogTemplate(to) {
       },
       { headers: { Authorization: "Bearer " + TOKEN, "Content-Type": "application/json" } }
     );
-    console.log("Catalog template sent");
   } catch(err) {
     console.error("Catalog template error:", JSON.stringify(err.response && err.response.data, null, 2));
   }
@@ -435,14 +531,11 @@ async function sendCatalogTemplate(to) {
 
 // =========================
 // RETURNING CUSTOMER MENU
-// Both templates (start_message + catalog) + welcome back buttons
+// Both templates + welcome back buttons
 // =========================
 async function sendReturningCustomerMenu(to) {
-  // Send both templates first — same as new customer
   await sendWelcomeTemplates(to);
   await new Promise(function(r) { setTimeout(r, 1500); });
-
-  // Then show welcome back buttons
   try {
     await axios.post(
       "https://graph.facebook.com/v25.0/" + PHONE_ID + "/messages",
@@ -532,14 +625,14 @@ async function sendAddressFlow(to) {
     );
   } catch(err) {
     console.error("Address flow error:", JSON.stringify(err.response && err.response.data, null, 2));
-    await sendMessage(to, "📦 Please send your delivery details:\n\nName:\nPhone:\nHouse No.:\nArea & Street:\nLandmark:\nCity:\nPincode:");
+    await sendMessage(to, "📦 Please send your delivery details:\n\nName:\nPhone:\nEmail:\nHouse No.:\nArea & Street:\nLandmark:\nCity:\nPincode:");
   }
 }
 
 
 // =========================
 // PROMO OFFER BUTTONS
-// Only sent to customers from PROMO_PINCODES
+// Only for PROMO_PINCODES customers
 // =========================
 async function sendPromoOfferButtons(to, promoCode) {
   try {
@@ -550,15 +643,16 @@ async function sendPromoOfferButtons(to, promoCode) {
         interactive: {
           type: "button",
           body: {
-            text: "🎁 *Special offer for Jamkhed customers!*\n\n" +
-                  "You can get *10% off* on your order using code *" + promoCode + "*\n\n" +
-                  "Would you like to apply it?"
+            text:
+              "🎁 *Special offer for Jamkhed customers!*\n\n" +
+              "You can get *10% off* on your order.\n\n" +
+              "Would you like to apply it?"
           },
           footer: { text: "Wipz — Exclusive local offer 💖" },
           action: {
             buttons: [
-              { type: "reply", reply: { id: "APPLY_PROMO_" + promoCode, title: "Apply 10% Off"  } },
-              { type: "reply", reply: { id: "SKIP_PROMO",               title: "No Thanks"      } }
+              { type: "reply", reply: { id: "APPLY_PROMO_" + promoCode, title: "Apply 10% Off" } },
+              { type: "reply", reply: { id: "SKIP_PROMO",               title: "No Thanks"     } }
             ]
           }
         }
@@ -591,6 +685,27 @@ async function sendOrderStatusUpdate(to, referenceId, status) {
 
 
 // =========================
+// TRIGGER PAYMENT
+// Central function — builds summary, applies promo if any, sends payment message
+// =========================
+async function triggerPayment(from, orderId, items, discountAmount) {
+  discountAmount = discountAmount || 0;
+  var summary = buildOrderSummary(items);
+  userState[from].step = "payment";
+
+  await sendMessage(from, "🎉 Almost there! Here's your order 👇");
+
+  await sendPaymentMessage(from, {
+    totalPrice:    summary.totalPrice,
+    lineItems:     summary.lineItems,
+    itemsSummary:  summary.itemsSummary,
+    orderId:       orderId,
+    discountAmount: discountAmount
+  });
+}
+
+
+// =========================
 // MAIN WEBHOOK
 // =========================
 app.post("/webhook", async function(req, res) {
@@ -612,7 +727,9 @@ app.post("/webhook", async function(req, res) {
       userState[from] = { step: "idle", seenWelcome: false, hasOrders: false };
     }
 
-    // ── PAYMENT STATUS (WhatsApp native) ───────────────────────────
+    // ── PAYMENT CONFIRMATION FROM META/RAZORPAY ─────────────────────
+    // Meta receives payment from Razorpay and sends it here as payment_info
+    // No Razorpay webhook needed — Meta handles the forwarding
     if (type === "interactive" && incomingMsg.interactive && incomingMsg.interactive.type === "payment_info") {
       var pi          = incomingMsg.interactive.payment_info;
       var piStatus    = pi && pi.payment_status;
@@ -620,24 +737,46 @@ app.post("/webhook", async function(req, res) {
       var txnId       = pi && pi.transaction_id;
       var amount      = pi && pi.total_amount ? pi.total_amount.value / 100 : 0;
 
+      console.log("Payment:", piStatus, "| Order:", referenceId, "| TXN:", txnId);
+
       if (piStatus === "captured") {
         knownCustomers.add(from);
         var pSumStr = userOrders[from] && userOrders[from].items
           ? userOrders[from].items.map(function(i) { return i.name + " x" + i.quantity; }).join(", ")
           : "";
+
         await saveOrder({
-          orderId: referenceId, phone: from, product: pSumStr, price: amount,
-          address: userOrders[from] ? userOrders[from].address || "" : "",
-          status: "PAID", screenshot: "UPI TXN: " + txnId, raw: JSON.stringify(pi)
+          orderId:    referenceId,
+          phone:      from,
+          product:    pSumStr,
+          price:      amount,
+          address:    userOrders[from] ? userOrders[from].address || "" : "",
+          email:      userOrders[from] ? userOrders[from].email   || "" : "",
+          status:     "PAID via Razorpay ✅",
+          screenshot: "Razorpay TXN: " + txnId,
+          raw:        JSON.stringify(pi)
         });
+
         userState[from] = { step: "done", seenWelcome: true, hasOrders: true };
+
         await sendMessage(from,
-          "✅ *Payment Confirmed!*\n\n🧾 Order ID: *" + referenceId + "*\n💰 Amount: ₹" + amount +
-          "\n🔖 UTR: " + txnId + "\n\nYour order is being processed 🚚\n\n💖 Thank you for shopping with *Wipz*!"
+          "✅ *Payment Confirmed!*\n\n" +
+          "🧾 Order ID: *" + referenceId + "*\n" +
+          "💰 Amount Paid: ₹" + amount + "\n" +
+          "🔖 Transaction ID: " + txnId + "\n\n" +
+          "Your order is being processed 🚚\n" +
+          "We'll send shipping updates here.\n\n" +
+          "💖 Thank you for shopping with *Wipz*!"
         );
+
         await sendOrderStatusUpdate(from, referenceId, "processing");
+
       } else if (piStatus === "failed") {
         await sendMessage(from, "❌ Payment failed. Please try again 👇");
+        // Resend payment message
+        if (userOrders[from] && userOrders[from].items) {
+          await triggerPayment(from, referenceId, userOrders[from].items, 0);
+        }
       }
       return res.sendStatus(200);
     }
@@ -647,7 +786,6 @@ app.post("/webhook", async function(req, res) {
       var btnId = incomingMsg.interactive.button_reply && incomingMsg.interactive.button_reply.id;
 
       if (btnId === "SHOP_AGAIN") {
-        // Reset cart and send catalog template only (not start_message again)
         userState[from] = { step: "idle", seenWelcome: true, hasOrders: true };
         userOrders[from] = null;
         await sendMessage(from, "😍 Let's find your next favourite pair! 👟\n\nBrowse our latest collection below 👇");
@@ -659,7 +797,6 @@ app.post("/webhook", async function(req, res) {
         await sendOrderSupportMenu(from);
 
       } else if (btnId === "CALL_SUPPORT") {
-        // Only show phone number when customer explicitly taps Call Us
         await sendMessage(from,
           "📞 *Call or WhatsApp us:*\n\n+" + SUPPORT_PHONE +
           "\n\n_Mon–Sat: 10am – 7pm_\n\nWe're happy to help! 😊"
@@ -669,10 +806,9 @@ app.post("/webhook", async function(req, res) {
         var autoCode    = btnId.replace("APPLY_PROMO_", "");
         var promoResult = applyPromoCode(userOrders[from] && userOrders[from].items || [], autoCode);
         if (promoResult.valid) {
-          var pOId  = userOrders[from] && userOrders[from].pendingOrderId;
-          var pSum  = buildOrderSummary(promoResult.items);
-          userState[from].step = "payment";
+          var pOId = userOrders[from] && userOrders[from].pendingOrderId;
           userOrders[from].finalPrice = promoResult.discountedTotal;
+          userOrders[from].items      = promoResult.items;
           await sendMessage(from,
             "✅ *Discount applied!*\n\n" + promoResult.description +
             "\nOriginal: ₹" + promoResult.originalTotal +
@@ -680,25 +816,21 @@ app.post("/webhook", async function(req, res) {
             "\n💰 *You pay: ₹" + promoResult.discountedTotal + "*"
           );
           await new Promise(function(r) { setTimeout(r, 600); });
-          await sendPaymentQR(from, { totalPrice: pSum.totalPrice, itemsSummary: pSum.itemsSummary, orderId: pOId });
+          await triggerPayment(from, pOId, promoResult.items, promoResult.discountAmount);
         }
 
       } else if (btnId === "SKIP_PROMO") {
-        // Customer from promo pincode chose to skip — go straight to payment
         var skOId = userOrders[from] && userOrders[from].pendingOrderId;
-        var skSum = buildOrderSummary(userOrders[from] && userOrders[from].items || []);
-        userState[from].step = "payment";
-        await sendPaymentQR(from, { totalPrice: skSum.totalPrice, itemsSummary: skSum.itemsSummary, orderId: skOId });
+        await triggerPayment(from, skOId, userOrders[from] && userOrders[from].items || [], 0);
       }
 
       return res.sendStatus(200);
     }
 
-    // ── LIST REPLY (support options) ────────────────────────────────
+    // ── LIST REPLY (support) ─────────────────────────────────────────
     if (type === "interactive" && incomingMsg.interactive && incomingMsg.interactive.type === "list_reply") {
       var listId = incomingMsg.interactive.list_reply && incomingMsg.interactive.list_reply.id;
 
-      // Log support request to Logs sheet
       await saveChatLog({ phone: from, message: "SUPPORT: " + listId, step: "support" });
 
       if (listId === "ORDER_STATUS") {
@@ -708,34 +840,29 @@ app.post("/webhook", async function(req, res) {
           "Please share your *Order ID* (starts with ORD...) and we'll check the status for you.\n\n" +
           "Thank you for your patience — we'll get back to you shortly! 🙏"
         );
-
       } else if (listId === "RETURN_REQUEST") {
         userState[from].step = "support_return";
         await sendMessage(from,
           "↩️ *Return Request*\n\n" +
           "We accept returns within *7 days* of delivery.\n\n" +
           "Please share:\n• Your *Order ID*\n• *Reason* for return\n• *Photo* of the product\n\n" +
-          "Send these details and our team will arrange the return pickup for you."
+          "Send the details and our team will arrange the return pickup for you."
         );
-
       } else if (listId === "REPLACEMENT") {
         userState[from].step = "support_replacement";
         await sendMessage(from,
           "🔄 *Replacement Request*\n\n" +
-          "We're sorry about that!\n\n" +
-          "Please share:\n• Your *Order ID*\n• *Photo* of the damaged or wrong item\n\n" +
+          "We're sorry about that! Please share:\n• Your *Order ID*\n• *Photo* of the damaged or wrong item\n\n" +
           "Send the details and we'll arrange a replacement as soon as possible."
         );
-
       } else if (listId === "REFUND") {
         userState[from].step = "support_refund";
         await sendMessage(from,
           "💰 *Refund Status*\n\n" +
-          "Refunds are processed within *5–7 working days* after the return is picked up.\n\n" +
+          "Refunds are processed within *5–7 working days* after return pickup.\n\n" +
           "Please share your *Order ID* and we'll check the refund status for you.\n\n" +
           "Thank you for your patience! 🙏"
         );
-
       } else if (listId === "TALK_TO_US") {
         userState[from].step = "support_detail";
         await sendMessage(from,
@@ -748,7 +875,7 @@ app.post("/webhook", async function(req, res) {
       return res.sendStatus(200);
     }
 
-    // ── FLOW COMPLETION (address form submitted) ─────────────────────
+    // ── FLOW COMPLETION (address form) ──────────────────────────────
     if (type === "interactive" && incomingMsg.interactive && incomingMsg.interactive.type === "nfm_reply") {
       var formData = {};
       try {
@@ -759,6 +886,7 @@ app.post("/webhook", async function(req, res) {
 
       var full_name      = formData.full_name      || "";
       var fPhone         = formData.phone          || "";
+      var fEmail         = formData.email          || "";
       var address_line_1 = formData.address_line_1 || "";
       var address_line_2 = formData.address_line_2 || "";
       var address_line_3 = formData.address_line_3 || "";
@@ -772,11 +900,16 @@ app.post("/webhook", async function(req, res) {
         city, pincode
       ].filter(Boolean).join(", ");
 
-      // Save address to Logs sheet instantly
-      await saveChatLog({ phone: from, message: "ADDRESS: " + fullAddress, step: "address_submitted" });
+      // Save address + email instantly to Logs sheet
+      await saveChatLog({
+        phone:   from,
+        message: "ADDRESS: " + fullAddress + (fEmail ? " | Email: " + fEmail : ""),
+        step:    "address_submitted"
+      });
 
       if (!userOrders[from]) userOrders[from] = { items: [] };
       userOrders[from].address = fullAddress;
+      userOrders[from].email   = fEmail;
 
       if (!userOrders[from].items || userOrders[from].items.length === 0) {
         await sendMessage(from, "👉 Please select a product from catalogue first 🛍️");
@@ -792,28 +925,19 @@ app.post("/webhook", async function(req, res) {
       userOrders[from].orderId        = orderId;
       userOrders[from].pendingOrderId = orderId;
 
-      // PINCODE CHECK:
-      // If pincode is in PROMO_PINCODES → show promo offer buttons
-      // Otherwise → go DIRECTLY to payment, no promo mention at all
+      // Pincode check — promo only for 413201, others go straight to payment
       if (PROMO_PINCODES.indexOf(String(pincode).trim()) !== -1) {
         userState[from].step = "awaiting_promo";
         await sendPromoOfferButtons(from, PINCODE_PROMO_CODE);
       } else {
-        // All other pincodes — straight to payment
-        userState[from].step = "payment";
-        var directSummary = buildOrderSummary(userOrders[from].items);
-        await sendMessage(from, "🎉 Almost there! Here's your payment 👇");
-        await sendPaymentQR(from, {
-          totalPrice:   directSummary.totalPrice,
-          itemsSummary: directSummary.itemsSummary,
-          orderId:      orderId
-        });
+        // Direct to payment — no promo mention
+        await triggerPayment(from, orderId, userOrders[from].items, 0);
       }
 
       return res.sendStatus(200);
     }
 
-    // ── CHAT LOG for all other message types ─────────────────────────
+    // ── CHAT LOG ─────────────────────────────────────────────────────
     var logMessage = (incomingMsg.text && incomingMsg.text.body) || type;
     if (type === "order" && incomingMsg.order && incomingMsg.order.product_items) {
       logMessage = incomingMsg.order.product_items.map(function(p) {
@@ -821,7 +945,6 @@ app.post("/webhook", async function(req, res) {
       }).join(", ") || "Order";
     }
     await saveChatLog({ phone: from, message: logMessage, step: userState[from].step });
-    console.log("Incoming type:", type, "| step:", userState[from].step);
 
     // ── GREETING / FIRST MESSAGE ─────────────────────────────────────
     var textBody   = incomingMsg.text && incomingMsg.text.body ? incomingMsg.text.body.toLowerCase().trim() : "";
@@ -832,12 +955,10 @@ app.post("/webhook", async function(req, res) {
       userState[from].seenWelcome = true;
       var isReturning = knownCustomers.has(from) || userState[from].hasOrders;
       if (isReturning) {
-        // Returning customer: both templates + welcome back buttons
         userState[from] = { step: "idle", seenWelcome: true, hasOrders: true };
         userOrders[from] = null;
         await sendReturningCustomerMenu(from);
       } else {
-        // New customer: both templates only
         userState[from].step = "idle";
         userOrders[from]     = null;
         await sendWelcomeTemplates(from);
@@ -912,21 +1033,20 @@ app.post("/webhook", async function(req, res) {
       return res.sendStatus(200);
     }
 
-    // ── IMAGE — could be payment screenshot OR support photo ─────────
+    // ── IMAGE received ───────────────────────────────────────────────
     if (type === "image") {
       var imgUrl  = await getMediaUrl(incomingMsg.image && incomingMsg.image.id);
       var curStep = userState[from].step;
 
       if (curStep === "payment") {
-        // Payment screenshot
+        // Screenshot for fallback QR payment
         var scrOrdId = userOrders[from] && userOrders[from].orderId || "ORD-MANUAL";
         var scrProd  = userOrders[from] && userOrders[from].items
           ? userOrders[from].items.map(function(i) { return i.name + " x" + i.quantity; }).join(", ")
           : "";
         var scrTotal = userOrders[from] && userOrders[from].finalPrice ||
                        (userOrders[from] && userOrders[from].items
-                         ? userOrders[from].items.reduce(function(s,i){return s+i.price*i.quantity;},0)
-                         : 0);
+                         ? userOrders[from].items.reduce(function(s,i){return s+i.price*i.quantity;},0) : 0);
 
         userOrders[from].status = "screenshot_received";
         userState[from].step    = "done";
@@ -938,6 +1058,7 @@ app.post("/webhook", async function(req, res) {
           product:    scrProd,
           price:      scrTotal,
           address:    userOrders[from] && userOrders[from].address || "",
+          email:      userOrders[from] && userOrders[from].email   || "",
           status:     "Screenshot received — verify payment",
           screenshot: imgUrl,
           raw:        JSON.stringify(userOrders[from])
@@ -952,36 +1073,32 @@ app.post("/webhook", async function(req, res) {
         );
 
       } else if (curStep === "support_return" || curStep === "support_replacement") {
-        // Support photo for return/replacement — save to Sheet1
         var supportType = curStep === "support_return" ? "Return Request" : "Replacement Request";
-        var supportMsg2  = incomingMsg.image && incomingMsg.image.caption || supportType + " photo";
 
-        // Save to Sheet1 so you can see it
         await saveOrder({
           orderId:    "SUP-" + from + "-" + Date.now().toString().slice(-6),
           phone:      from,
-          product:    supportMsg2,
+          product:    supportType + " photo",
           price:      "",
           address:    "",
+          email:      "",
           status:     supportType + " — photo received",
           screenshot: imgUrl,
           raw:        JSON.stringify({ type: supportType, phone: from })
         });
 
-        // Also log it
-        await saveChatLog({ phone: from, message: supportType + " photo received: " + imgUrl, step: curStep });
+        await saveChatLog({ phone: from, message: supportType + " photo: " + imgUrl, step: curStep });
 
         await sendMessage(from,
           "✅ *Thank you for sharing the details!*\n\n" +
-          "We've received your " + (curStep === "support_return" ? "return" : "replacement") + " request.\n\n" +
+          "We've received your " + (curStep === "support_return" ? "return" : "replacement") + " request with the photo.\n\n" +
           "Our team will review and get back to you within *24–48 hours*.\n\n" +
           "For urgent help: 📞 *+" + SUPPORT_PHONE + "*"
         );
 
       } else {
-        // Image received at unexpected step — log it
-        await saveChatLog({ phone: from, message: "Image received at step: " + curStep + " | URL: " + imgUrl, step: curStep });
-        await sendMessage(from, "📸 Image received! If this is for an order or support request, please send your Order ID as well.");
+        await saveChatLog({ phone: from, message: "Image at step: " + curStep, step: curStep });
+        await sendMessage(from, "📸 Image received! If this is for a support request, please also send your Order ID.");
       }
 
       return res.sendStatus(200);
@@ -992,14 +1109,11 @@ app.post("/webhook", async function(req, res) {
       var step = userState[from].step;
 
       if (step === "payment") {
-        var currentTotal = userOrders[from] && userOrders[from].finalPrice ||
-          (userOrders[from] && userOrders[from].items
-            ? userOrders[from].items.reduce(function(s,i){return s+i.price*i.quantity;},0)
-            : 0);
         await sendMessage(from,
-          "📸 Please send your *payment screenshot* after paying.\n\n" +
-          "Amount: *₹" + currentTotal + "*\n" +
-          "Order ID: *" + (userOrders[from] && userOrders[from].orderId || "") + "*"
+          "📱 Please tap *Review & Pay* above to complete your payment.\n\n" +
+          "If the button didn't work, scan the QR code sent above or pay to:\n" +
+          "UPI: *" + UPI_VPA + "*\n" +
+          "Amount: *₹" + (userOrders[from] && (userOrders[from].finalPrice || (userOrders[from].items ? userOrders[from].items.reduce(function(s,i){return s+i.price*i.quantity;},0) : 0))) + "*"
         );
 
       } else if (step === "awaiting_address_flow") {
@@ -1009,33 +1123,22 @@ app.post("/webhook", async function(req, res) {
         await sendMessage(from, "👆 Please tap *Apply 10% Off* or *No Thanks* above.");
 
       } else if (step === "support_order_status") {
-        // Customer replied with order ID for status check — log it
         await saveChatLog({ phone: from, message: "Order status query: " + textBody, step: step });
         await sendMessage(from,
-          "✅ *Thank you!*\n\n" +
-          "We've received your order status request.\n\n" +
-          "Our team will check and get back to you shortly 🙏\n\n" +
-          "For urgent help: 📞 *+" + SUPPORT_PHONE + "*"
+          "✅ *Thank you!*\n\nWe've received your query and will check your order status.\n\nOur team will get back to you shortly 🙏"
         );
         userState[from].step = "support_detail";
 
       } else if (step === "support_return" || step === "support_replacement") {
-        // Text details for return/replacement — log it
         await saveChatLog({ phone: from, message: "Support detail: " + textBody, step: step });
         await sendMessage(from,
-          "✅ *Thank you for the details!*\n\n" +
-          "Please also send a *photo* of the product so we can process your request faster.\n\n" +
-          "Our team will get back to you within *24–48 hours* 🙏"
+          "✅ *Details received!*\n\nPlease also send a *photo* of the product so we can process your request faster.\n\nOur team will get back to you within *24–48 hours* 🙏"
         );
 
       } else if (step === "support_refund") {
-        // Customer sent order ID for refund check — log it
         await saveChatLog({ phone: from, message: "Refund query: " + textBody, step: step });
         await sendMessage(from,
-          "✅ *Thank you!*\n\n" +
-          "We've noted your refund request.\n\n" +
-          "Our team will check the status and get back to you shortly 🙏\n\n" +
-          "For urgent help: 📞 *+" + SUPPORT_PHONE + "*"
+          "✅ *Thank you!*\n\nWe'll check the refund status and get back to you shortly 🙏"
         );
         userState[from].step = "support_detail";
 
@@ -1045,6 +1148,7 @@ app.post("/webhook", async function(req, res) {
       } else {
         await sendMessage(from, "👉 Please select a product from catalogue to continue 🛍️");
       }
+
       return res.sendStatus(200);
     }
 
