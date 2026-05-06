@@ -41,19 +41,21 @@ const VERIFY_TOKEN            = "my_verify_token";
 const PHONE_ID                = process.env.PHONE_NUMBER_ID;
 const TOKEN                   = process.env.ACCESS_TOKEN;
 const UPI_VPA                 = process.env.UPI_VPA                 || "9657748074-3@ibl";
-const UPI_NAME                = process.env.UPI_NAME                || "Wipz";
 const SUPPORT_PHONE           = process.env.SUPPORT_PHONE           || "919657748074";
 const ADDRESS_FLOW_ID         = process.env.ADDRESS_FLOW_ID         || "YOUR_FLOW_ID_HERE";
 const FLOW_PRIVATE_KEY        = process.env.FLOW_PRIVATE_KEY        || "";
 const START_MESSAGE_IMAGE_URL = process.env.START_MESSAGE_IMAGE_URL || "YOUR_IMAGE_URL_HERE";
 
-// Razorpay payment config — exact name from WhatsApp Manager → Payment configurations
+// Exact name from WhatsApp Manager → Payment configurations
 const RAZORPAY_CONFIG_NAME = "razorpay";
 
-// Promo codes — only for PROMO_PINCODES, all others go straight to payment
+// Promo codes config
+// Adding/removing codes here is all you ever need to do
 const PROMO_CODES = {
-  "JAMKHED10": { discount: 10, type: "percent", description: "10% off for Jamkhed customers" }
+  "JAMKHED10": { discount: 10, type: "percent", description: "10% Jamkhed Special Offer" }
 };
+
+// Pincodes that get automatic discount — no button, no choice, just applied
 const PROMO_PINCODES     = ["413201"];
 const PINCODE_PROMO_CODE = "JAMKHED10";
 
@@ -165,16 +167,16 @@ async function saveOrder(data) {
       range: "Sheet1",
       valueInputOption: "USER_ENTERED",
       requestBody: { values: [[
-        data.orderId    || "",
+        data.orderId  || "",
         new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
-        data.phone      || "",
-        data.product    || "",
-        data.price      || "",
-        data.address    || "",
-        data.email      || "",
-        data.status     || "",
-        data.txn        || "",
-        data.raw        || ""
+        data.phone    || "",
+        data.product  || "",
+        data.price    || "",
+        data.address  || "",
+        data.email    || "",
+        data.status   || "",
+        data.txn      || "",
+        data.raw      || ""
       ]]}
     });
     console.log("Sheet1 saved:", data.orderId, "|", data.status);
@@ -213,6 +215,8 @@ async function getMediaUrl(mediaId) {
   }
 }
 
+// Build summary from ORIGINAL item prices (never discounted prices)
+// Discount is passed separately to Razorpay — not baked into item prices
 function buildOrderSummary(items) {
   var totalPrice = 0;
   var lineItems  = [];
@@ -236,61 +240,85 @@ function buildOrderSummary(items) {
   };
 }
 
+// Apply promo — returns discount numbers only, does NOT modify item prices
+// Item prices must stay original so Razorpay subtotal math works correctly
 function applyPromoCode(items, code) {
   var promo = PROMO_CODES[code.trim().toUpperCase()];
   if (!promo) return { valid: false };
+
   var originalTotal  = items.reduce(function(s, i) { return s + i.price * i.quantity; }, 0);
   var discountAmount = promo.type === "percent"
     ? Math.round(originalTotal * promo.discount / 100)
     : Math.min(promo.discount, originalTotal - 1);
   var discountedTotal = originalTotal - discountAmount;
-  var ratio           = discountedTotal / originalTotal;
-  var discountedItems = items.map(function(item) {
-    return Object.assign({}, item, { price: parseFloat((item.price * ratio).toFixed(2)) });
-  });
+
   return {
-    valid: true, items: discountedItems,
-    discountAmount: discountAmount, discountedTotal: discountedTotal,
-    originalTotal: originalTotal, description: promo.description
+    valid:           true,
+    items:           items,             // ✅ original items unchanged
+    discountAmount:  discountAmount,    // e.g. 30 (₹30.90 rounded)
+    discountedTotal: discountedTotal,   // e.g. 278 (what customer pays)
+    originalTotal:   originalTotal,     // e.g. 309 (subtotal before discount)
+    description:     promo.description
   };
 }
 
-// Calculate estimated delivery date (5-7 business days from now)
+// Estimated delivery: 5-7 business days
 function getEstimatedDelivery() {
-  var date    = new Date();
-  var days    = 0;
-  var added   = 0;
+  var date  = new Date();
+  var added = 0;
   while (added < 7) {
     date.setDate(date.getDate() + 1);
     var day = date.getDay();
-    if (day !== 0 && day !== 6) added++;  // skip Sunday(0) and Saturday(6)
-    if (added === 5) { days = 5; }
+    if (day !== 0 && day !== 6) added++;
   }
-  return date.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kolkata" });
+  return date.toLocaleDateString("en-IN", {
+    day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kolkata"
+  });
 }
 
 
 // =========================
 // SEND RAZORPAY PAYMENT MESSAGE
-// Correct structure per Meta docs:
-// payment_settings array → type: "payment_gateway" → payment_gateway object
+//
+// ✅ CORRECT MATH (per Meta docs):
+//   total_amount = subtotal + tax + shipping - discount
+//   So: subtotal = original price (before discount)
+//       discount = amount deducted
+//       total    = what customer actually pays
+//
+// Example with 10% off on ₹309:
+//   subtotal = 30900 (₹309)
+//   discount =  3090 (₹30.90)
+//   total    = 27810 (₹278.10)
+//   Check:  30900 - 3090 = 27810 ✅
 // =========================
 async function sendPaymentMessage(to, orderDetails) {
-  var totalPrice   = orderDetails.totalPrice;
-  var lineItems    = orderDetails.lineItems;
-  var itemsSummary = orderDetails.itemsSummary;
-  var orderId      = orderDetails.orderId;
-  var discountAmt  = orderDetails.discountAmount || 0;
+  var customerPays  = orderDetails.customerPays;   // discounted total — what customer pays
+  var originalTotal = orderDetails.originalTotal;  // pre-discount subtotal
+  var lineItems     = orderDetails.lineItems;       // built from ORIGINAL item prices
+  var itemsSummary  = orderDetails.itemsSummary;
+  var orderId       = orderDetails.orderId;
+  var discountAmt   = orderDetails.discountAmount || 0;
 
-  var amountInPaise   = Math.round(totalPrice * 100);
-  var subtotalInPaise = amountInPaise + Math.round(discountAmt * 100);
-  var discountInPaise = Math.round(discountAmt * 100);
+  // All amounts in paise (multiply ₹ by 100)
+  var customerPaysPaise  = Math.round(customerPays * 100);
+  var subtotalPaise      = Math.round(originalTotal * 100);   // original price
+  var discountPaise      = Math.round(discountAmt * 100);
+
+  // Verify math before sending (prevents Meta rejection)
+  // subtotal - discount must equal total_amount
+  var mathCheck = subtotalPaise - discountPaise;
+  if (mathCheck !== customerPaysPaise) {
+    // Fix rounding drift
+    discountPaise = subtotalPaise - customerPaysPaise;
+    console.log("Fixed rounding drift. discount paise:", discountPaise);
+  }
 
   var itemsWithDetails = lineItems.map(function(item) {
     return {
       retailer_id:       item.retailer_id,
       name:              item.name,
-      amount:            item.amount,
+      amount:            item.amount,      // original price per item
       quantity:          item.quantity,
       country_of_origin: "India",
       importer_name:     "Wipz Footcare Industries",
@@ -304,6 +332,14 @@ async function sendPaymentMessage(to, orderDetails) {
     };
   });
 
+  var bodyText = discountAmt > 0
+    ? "Here's your order summary 🛍️\n\n" + itemsSummary +
+      "\n\n🎁 *Discount Applied: -₹" + discountAmt + "*" +
+      "\n💰 *You Pay: ₹" + customerPays + "*" +
+      "\n\nTap *Review & Pay* to complete payment ✅"
+    : "Here's your order summary 🛍️\n\n" + itemsSummary +
+      "\n\nTap *Review & Pay* to complete payment ✅";
+
   var payload = {
     messaging_product: "whatsapp",
     recipient_type:    "individual",
@@ -311,19 +347,13 @@ async function sendPaymentMessage(to, orderDetails) {
     type:              "interactive",
     interactive: {
       type: "order_details",
-      body: {
-        text:
-          "Here's your order summary 🛍️\n\n" +
-          itemsSummary +
-          "\n\nTap *Review & Pay* to complete payment ✅\n" +
-          "_Pay via UPI, Card, Netbanking or Wallet_"
-      },
+      body: { text: bodyText },
       footer: { text: "Wipz — Secure payment via Razorpay 🔒" },
       action: {
         name: "review_and_pay",
         parameters: {
-          reference_id: orderId,
-          type:         "physical-goods",
+          reference_id:     orderId,
+          type:             "physical-goods",
           payment_settings: [
             {
               type: "payment_gateway",
@@ -332,23 +362,23 @@ async function sendPaymentMessage(to, orderDetails) {
                 configuration_name: RAZORPAY_CONFIG_NAME,
                 razorpay: {
                   receipt: orderId,
-                  notes: { order_id: orderId, source: "whatsapp_bot" }
+                  notes:   { order_id: orderId, source: "whatsapp_bot" }
                 }
               }
             }
           ],
           currency:     "INR",
-          total_amount: { value: amountInPaise, offset: 100 },
+          total_amount: { value: customerPaysPaise, offset: 100 },
           order: {
             status:   "pending",
             items:    itemsWithDetails,
-            subtotal: { value: subtotalInPaise, offset: 100 },
-            tax:      { value: 0, offset: 100, description: "GST Inclusive"  },
-            shipping: { value: 0, offset: 100, description: "Free Delivery"  },
+            subtotal: { value: subtotalPaise,  offset: 100 },
+            tax:      { value: 0,              offset: 100, description: "GST Inclusive" },
+            shipping: { value: 0,              offset: 100, description: "Free Delivery" },
             discount: {
-              value:       discountInPaise,
+              value:       discountPaise,
               offset:      100,
-              description: discountAmt > 0 ? "Promo discount applied" : ""
+              description: discountAmt > 0 ? "Jamkhed Special Offer 10% off" : ""
             }
           }
         }
@@ -356,7 +386,10 @@ async function sendPaymentMessage(to, orderDetails) {
     }
   };
 
-  console.log("Sending Razorpay payment, order:", orderId, "₹" + totalPrice);
+  console.log("Sending Razorpay payment | Order:", orderId,
+    "| Subtotal: ₹" + originalTotal,
+    "| Discount: ₹" + discountAmt,
+    "| Customer pays: ₹" + customerPays);
 
   try {
     await axios.post(
@@ -369,41 +402,48 @@ async function sendPaymentMessage(to, orderDetails) {
   } catch(error) {
     var errData = error.response && error.response.data;
     console.error("❌ Razorpay payment failed:", JSON.stringify(errData, null, 2));
-    return { success: false };
+    return { success: false, error: errData };
   }
 }
 
 
 // =========================
 // TRIGGER PAYMENT
+// Central function — always uses Razorpay
+// discountAmount = 0 for regular orders, >0 for promo orders
 // =========================
 async function triggerPayment(from, orderId, items, discountAmount) {
   discountAmount = discountAmount || 0;
-  var summary = buildOrderSummary(items);
+
+  var summary      = buildOrderSummary(items);  // always original prices
+  var customerPays = summary.totalPrice - discountAmount;
+
   userState[from].step = "payment";
+
   await sendMessage(from, "🎉 Almost there! Here's your order 👇");
+
   var result = await sendPaymentMessage(from, {
-    totalPrice:     summary.totalPrice,
+    customerPays:   customerPays,
+    originalTotal:  summary.totalPrice,
     lineItems:      summary.lineItems,
     itemsSummary:   summary.itemsSummary,
     orderId:        orderId,
     discountAmount: discountAmount
   });
+
   if (!result.success) {
-    // Only if Razorpay message itself fails to send — show UPI as last resort
+    // Log the error but don't show manual UPI — Razorpay only
+    console.error("Razorpay message failed for order:", orderId, JSON.stringify(result.error));
     await sendMessage(from,
-      "⚠️ Payment button failed to load. Please pay manually:\n\n" +
-      "UPI ID: *" + UPI_VPA + "*\n" +
-      "Amount: *₹" + summary.totalPrice + "*\n" +
-      "Ref: *" + orderId + "*\n\n" +
-      "Send screenshot after payment 📸"
+      "⚠️ We're having trouble loading the payment button.\n\n" +
+      "Please try again in a moment or contact us:\n📞 +" + SUPPORT_PHONE
     );
   }
 }
 
 
 // =========================
-// SEND ORDER STATUS UPDATE
+// ORDER STATUS UPDATE
 // =========================
 async function sendOrderStatusUpdate(to, referenceId, status) {
   try {
@@ -437,8 +477,7 @@ async function sendOrderStatusUpdate(to, referenceId, status) {
 
 
 // =========================
-// SEND WELCOME TEMPLATES
-// Uses IMAGE header (PNG) for start_message
+// WELCOME TEMPLATES (PNG image header)
 // =========================
 async function sendWelcomeTemplates(to) {
   try {
@@ -449,10 +488,7 @@ async function sendWelcomeTemplates(to) {
         template: {
           name: "start_message", language: { code: "en" },
           components: [
-            {
-              type: "header",
-              parameters: [{ type: "image", image: { link: START_MESSAGE_IMAGE_URL } }]
-            }
+            { type: "header", parameters: [{ type: "image", image: { link: START_MESSAGE_IMAGE_URL } }] }
           ]
         }
       },
@@ -468,7 +504,9 @@ async function sendWelcomeTemplates(to) {
       "_Proudly Made in Maharashtra_ 🇮🇳"
     );
   }
+
   await new Promise(function(r) { setTimeout(r, 1200); });
+
   try {
     await axios.post(
       "https://graph.facebook.com/v25.0/" + PHONE_ID + "/messages",
@@ -597,66 +635,38 @@ async function sendAddressFlow(to) {
   }
 }
 
-async function sendPromoOfferButtons(to, promoCode) {
-  try {
-    await axios.post(
-      "https://graph.facebook.com/v25.0/" + PHONE_ID + "/messages",
-      {
-        messaging_product: "whatsapp", recipient_type: "individual", to: to, type: "interactive",
-        interactive: {
-          type: "button",
-          body: {
-            text:
-              "🎁 *Special offer for Jamkhed customers!*\n\n" +
-              "You can get *10% off* on your order.\n\n" +
-              "Would you like to apply it?"
-          },
-          footer: { text: "Wipz — Exclusive local offer 💖" },
-          action: {
-            buttons: [
-              { type: "reply", reply: { id: "APPLY_PROMO_" + promoCode, title: "Apply 10% Off" } },
-              { type: "reply", reply: { id: "SKIP_PROMO",               title: "No Thanks"     } }
-            ]
-          }
-        }
-      },
-      { headers: { Authorization: "Bearer " + TOKEN, "Content-Type": "application/json" } }
-    );
-  } catch(err) { console.error("Promo button error:", err.response && err.response.data || err.message); }
-}
-
 
 // =========================
 // MAIN WEBHOOK
 // =========================
 app.post("/webhook", async function(req, res) {
   try {
-    var body    = req.body;
-    var value   = body &&
-                  body.entry && body.entry[0] &&
-                  body.entry[0].changes && body.entry[0].changes[0] &&
-                  body.entry[0].changes[0].value;
+    var body  = req.body;
+    var value = body &&
+                body.entry && body.entry[0] &&
+                body.entry[0].changes && body.entry[0].changes[0] &&
+                body.entry[0].changes[0].value;
 
     if (!value) return res.sendStatus(200);
 
     // ================================================================
     // ✅ RAZORPAY PAYMENT STATUS
-    // Payment confirmation comes in value.statuses[] NOT value.messages[]
-    // type: "payment" with status: "captured" | "failed" | "pending"
+    // Comes in value.statuses[] with type: "payment"
+    // NOT in value.messages[] — this was the original bug
     // ================================================================
     var statuses = value.statuses || [];
     for (var si = 0; si < statuses.length; si++) {
       var statusObj = statuses[si];
       if (statusObj.type === "payment") {
         var from        = statusObj.recipient_id;
-        var piStatus    = statusObj.status;           // "captured" | "failed" | "pending"
+        var piStatus    = statusObj.status;
         var payment     = statusObj.payment || {};
         var referenceId = payment.reference_id;
         var amount      = payment.amount ? payment.amount.value / 100 : 0;
-        var txnId       = statusObj.id;               // webhook message ID
+        var txnId       = statusObj.id;
         var receipt     = payment.receipt || "";
 
-        console.log("💰 Payment status:", piStatus, "| Order:", referenceId, "| TXN:", txnId, "| ₹" + amount);
+        console.log("💰 Payment:", piStatus, "| Order:", referenceId, "| ₹" + amount);
 
         if (piStatus === "captured") {
           knownCustomers.add(from);
@@ -667,7 +677,6 @@ app.post("/webhook", async function(req, res) {
 
           var deliveryDate = getEstimatedDelivery();
 
-          // Save to Sheet1
           await saveOrder({
             orderId:  referenceId,
             phone:    from,
@@ -676,54 +685,55 @@ app.post("/webhook", async function(req, res) {
             address:  userOrders[from] ? userOrders[from].address || "" : "",
             email:    userOrders[from] ? userOrders[from].email   || "" : "",
             status:   "PAID via Razorpay ✅",
-            txn:      "Razorpay TXN: " + txnId + (receipt ? " | Receipt: " + receipt : ""),
+            txn:      "TXN: " + txnId + (receipt ? " | Receipt: " + receipt : ""),
             raw:      JSON.stringify(statusObj)
           });
 
-          // Log it too
-          await saveChatLog({ phone: from, message: "PAYMENT CAPTURED: " + referenceId + " ₹" + amount, step: "paid" });
+          await saveChatLog({
+            phone:   from,
+            message: "PAYMENT CAPTURED: " + referenceId + " ₹" + amount,
+            step:    "paid"
+          });
 
           userState[from] = { step: "done", seenWelcome: true, hasOrders: true };
 
-          // Send receipt / confirmation to customer
           await sendMessage(from,
             "✅ *Payment Confirmed!*\n\n" +
             "━━━━━━━━━━━━━━\n" +
             "🧾 *Order ID:* " + referenceId + "\n" +
             "💰 *Amount Paid:* ₹" + amount + "\n" +
-            "🏷️ *Products:* " + pSumStr + "\n" +
-            "📦 *Estimated Delivery:* " + deliveryDate + "\n" +
+            "🏷️ *Items:* " + pSumStr + "\n" +
+            "📦 *Est. Delivery:* by " + deliveryDate + "\n" +
             "━━━━━━━━━━━━━━\n\n" +
-            "Your order is being packed and will be shipped soon 🚚\n\n" +
-            "We'll send you a shipping update here once dispatched.\n\n" +
+            "Your order is being packed and will be shipped soon 🚚\n" +
+            "We'll send a shipping update here once dispatched.\n\n" +
             "💖 *Thank you for shopping with Wipz!*\n" +
             "_Proudly Made in Maharashtra_ 🇮🇳\n\n" +
-            "For any help: 📞 +" + SUPPORT_PHONE
+            "For help: 📞 +" + SUPPORT_PHONE
           );
 
-          // Update the order card status in WhatsApp chat
           await sendOrderStatusUpdate(from, referenceId, "processing");
 
         } else if (piStatus === "failed") {
-          console.log("Payment failed for order:", referenceId);
           await saveChatLog({ phone: from, message: "PAYMENT FAILED: " + referenceId, step: "payment_failed" });
-
           await sendMessage(from,
             "❌ *Payment Failed*\n\n" +
             "Your payment for Order *" + referenceId + "* could not be processed.\n\n" +
-            "Please tap *Review & Pay* above to try again, or contact us:\n" +
-            "📞 +" + SUPPORT_PHONE
+            "Please tap *Review & Pay* above to try again.\n\n" +
+            "Need help? 📞 +" + SUPPORT_PHONE
           );
-
-          // Resend payment message so they can retry
+          // Resend payment so they can retry
           if (userOrders[from] && userOrders[from].items) {
             await new Promise(function(r) { setTimeout(r, 1000); });
-            await triggerPayment(from, referenceId, userOrders[from].items,
-              userOrders[from].discountAmount || 0);
+            await triggerPayment(
+              from, referenceId,
+              userOrders[from].items,
+              userOrders[from].discountAmount || 0
+            );
           }
 
         } else if (piStatus === "pending") {
-          console.log("Payment pending for order:", referenceId);
+          console.log("Payment pending:", referenceId);
         }
       }
     }
@@ -762,28 +772,6 @@ app.post("/webhook", async function(req, res) {
           "📞 *Call or WhatsApp us:*\n\n+" + SUPPORT_PHONE +
           "\n\n_Mon–Sat: 10am – 7pm_\n\nWe're happy to help! 😊"
         );
-
-      } else if (btnId && btnId.startsWith("APPLY_PROMO_")) {
-        var autoCode    = btnId.replace("APPLY_PROMO_", "");
-        var promoResult = applyPromoCode(userOrders[from] && userOrders[from].items || [], autoCode);
-        if (promoResult.valid) {
-          var pOId = userOrders[from] && userOrders[from].pendingOrderId;
-          userOrders[from].finalPrice     = promoResult.discountedTotal;
-          userOrders[from].discountAmount = promoResult.discountAmount;
-          userOrders[from].items          = promoResult.items;
-          await sendMessage(from,
-            "✅ *Discount applied!*\n\n" + promoResult.description +
-            "\nOriginal: ₹" + promoResult.originalTotal +
-            "\nYou save: ₹" + promoResult.discountAmount +
-            "\n💰 *You pay: ₹" + promoResult.discountedTotal + "*"
-          );
-          await new Promise(function(r) { setTimeout(r, 600); });
-          await triggerPayment(from, pOId, promoResult.items, promoResult.discountAmount);
-        }
-
-      } else if (btnId === "SKIP_PROMO") {
-        var skOId = userOrders[from] && userOrders[from].pendingOrderId;
-        await triggerPayment(from, skOId, userOrders[from] && userOrders[from].items || [], 0);
       }
 
       return res.sendStatus(200);
@@ -861,6 +849,7 @@ app.post("/webhook", async function(req, res) {
         city, pincode
       ].filter(Boolean).join(", ");
 
+      // Save address to Logs instantly
       await saveChatLog({
         phone:   from,
         message: "ADDRESS: " + fullAddress + (fEmail ? " | Email: " + fEmail : ""),
@@ -882,13 +871,59 @@ app.post("/webhook", async function(req, res) {
         now.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" }).replace(/\//g, "") +
         "-" + now.getTime().toString().slice(-5);
 
-      userOrders[from].orderId        = orderId;
-      userOrders[from].pendingOrderId = orderId;
+      userOrders[from].orderId = orderId;
 
+      // ✅ PINCODE CHECK
+      // Promo pincode → auto-apply discount immediately, no button shown
+      // All other pincodes → straight to payment, no promo mention at all
       if (PROMO_PINCODES.indexOf(String(pincode).trim()) !== -1) {
-        userState[from].step = "awaiting_promo";
-        await sendPromoOfferButtons(from, PINCODE_PROMO_CODE);
+
+        var promoResult = applyPromoCode(userOrders[from].items, PINCODE_PROMO_CODE);
+
+        if (promoResult.valid) {
+          // Store discount info for payment retry / sheet saving
+          userOrders[from].discountAmount = promoResult.discountAmount;
+          userOrders[from].finalPrice     = promoResult.discountedTotal;
+          userOrders[from].originalTotal  = promoResult.originalTotal;
+
+          // Inform customer of discount
+          await sendMessage(from,
+            "🎁 *Jamkhed Special Offer — 10% Off Applied!*\n\n" +
+            "Original: ₹" + promoResult.originalTotal + "\n" +
+            "You save: ₹" + promoResult.discountAmount + "\n" +
+            "💰 *You pay: ₹" + promoResult.discountedTotal + "*\n\n" +
+            "Here's your payment 👇"
+          );
+
+          await new Promise(function(r) { setTimeout(r, 800); });
+
+          // Build summary from original prices (not discounted)
+          var promoSummary = buildOrderSummary(promoResult.items);
+          userState[from].step = "payment";
+
+          var promoResult2 = await sendPaymentMessage(from, {
+            customerPays:   promoResult.discountedTotal,
+            originalTotal:  promoResult.originalTotal,
+            lineItems:      promoSummary.lineItems,
+            itemsSummary:   promoSummary.itemsSummary,
+            orderId:        orderId,
+            discountAmount: promoResult.discountAmount
+          });
+
+          if (!promoResult2.success) {
+            console.error("Razorpay promo message failed:", orderId, JSON.stringify(promoResult2.error));
+            await sendMessage(from,
+              "⚠️ We're having trouble loading the payment button.\n\n" +
+              "Please try again in a moment or contact us:\n📞 +" + SUPPORT_PHONE
+            );
+          }
+        } else {
+          // Promo config missing — just proceed normally
+          await triggerPayment(from, orderId, userOrders[from].items, 0);
+        }
+
       } else {
+        // All other pincodes — straight to Razorpay, no promo mention
         await triggerPayment(from, orderId, userOrders[from].items, 0);
       }
 
@@ -991,7 +1026,7 @@ app.post("/webhook", async function(req, res) {
       return res.sendStatus(200);
     }
 
-    // ── IMAGE (support photos only — no payment screenshots needed now) ──
+    // ── IMAGE (support photos) ───────────────────────────────────────
     if (type === "image") {
       var imgUrl  = await getMediaUrl(message.image && message.image.id);
       var curStep = userState[from].step;
@@ -1020,7 +1055,7 @@ app.post("/webhook", async function(req, res) {
           "For urgent help: 📞 *+" + SUPPORT_PHONE + "*"
         );
       } else {
-        await saveChatLog({ phone: from, message: "Image received at step: " + curStep, step: curStep });
+        await saveChatLog({ phone: from, message: "Image at step: " + curStep, step: curStep });
         await sendMessage(from, "📸 Image received! If this is for a support request, please also share your Order ID.");
       }
 
@@ -1034,14 +1069,11 @@ app.post("/webhook", async function(req, res) {
       if (step === "payment") {
         await sendMessage(from,
           "📱 Please tap *Review & Pay* above to complete your payment.\n\n" +
-          "If you've already paid, we'll send you a confirmation shortly. ✅"
+          "If you've already paid, we'll send you a confirmation shortly ✅"
         );
 
       } else if (step === "awaiting_address_flow") {
         await sendMessage(from, "📋 Please fill in the delivery form above 👆");
-
-      } else if (step === "awaiting_promo") {
-        await sendMessage(from, "👆 Please tap *Apply 10% Off* or *No Thanks* above.");
 
       } else if (step === "support_order_status") {
         await saveChatLog({ phone: from, message: "Order status query: " + textBody, step: step });
