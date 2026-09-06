@@ -15,7 +15,7 @@ const PHONE_ID = process.env.PHONE_NUMBER_ID;
 const TOKEN    = process.env.ACCESS_TOKEN;
 
 const TEMPLATE_NAME = "wipz_mega_festive_sale";
-const TEMPLATE_LANG = "en"; // change if your template was submitted in en_US or another locale
+const TEMPLATE_LANG = "mr"; // change if your template was submitted in en_US or another locale
 
 const CSV_PATH   = "./retailers_clean.csv"; // phone,shop,city
 const BATCH_SIZE = 40;     // messages per batch
