@@ -15,12 +15,14 @@ const PHONE_ID = process.env.PHONE_NUMBER_ID;
 const TOKEN    = process.env.ACCESS_TOKEN;
 
 const TEMPLATE_NAME = "wipz_mega_festive_sale";
-const TEMPLATE_LANG = "mr"; // change if your template was submitted in en_US or another locale
+const TEMPLATE_LANG = "mr";
 
 const CSV_PATH   = "./retailers_clean.csv"; // phone,shop,city
 const BATCH_SIZE = 40;     // messages per batch
 const BATCH_DELAY_MS = 5000; // pause between batches (5s)
 const PER_MSG_DELAY_MS = 250; // small stagger within a batch
+
+const BANNER_IMAGE_URL = "https://res.cloudinary.com/dz6fzuzvr/image/upload/v1788688077/bnnner_yhffh2.png";
 
 const LOG_SUCCESS = "./broadcast_success.log";
 const LOG_FAILED  = "./broadcast_failed.log";
@@ -39,16 +41,22 @@ function loadRetailers() {
 // If your template has NO variables in the body, leave components as [].
 // If it does (e.g. {{1}} for shop name), uncomment and adjust below.
 function buildComponents(retailer) {
-  return [];
-  // Example if body has one variable for the retailer/shop name:
-  // return [
-  //   {
-  //     type: "body",
-  //     parameters: [
-  //       { type: "text", text: retailer.shop || "Retailer" }
-  //     ]
-  //   }
-  // ];
+  return [
+    {
+      type: "header",
+      parameters: [
+        { type: "image", image: { link: BANNER_IMAGE_URL } }
+      ]
+    }
+  ];
+  // If the body also has a variable (e.g. {{1}} for shop name), add a
+  // second component here:
+  // {
+  //   type: "body",
+  //   parameters: [
+  //     { type: "text", text: retailer.shop || "Retailer" }
+  //   ]
+  // }
 }
 
 async function sendTemplate(retailer) {
