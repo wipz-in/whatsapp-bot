@@ -739,6 +739,18 @@ app.post("/webhook", async function(req, res) {
     }
 
     // ================================================================
+    // ⏸️ ORDER FLOW PAUSE SWITCH
+    // Set ORDER_FLOW_PAUSED=true in Render env vars to pause new order
+    // flow messages (e.g. during a broadcast). Payment status updates
+    // above still process normally so no one gets stuck mid-payment.
+    // Set back to false (or remove) to resume.
+    // ================================================================
+    if (process.env.ORDER_FLOW_PAUSED === "true") {
+      console.log("Order flow paused — ignoring incoming message.");
+      return res.sendStatus(200);
+    }
+
+    // ================================================================
     // Normal message handling
     // ================================================================
     var messages = value.messages || [];
