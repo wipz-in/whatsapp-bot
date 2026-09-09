@@ -14,7 +14,7 @@ const axios = require("axios");
 const PHONE_ID = process.env.PHONE_NUMBER_ID;
 const TOKEN    = process.env.ACCESS_TOKEN;
 
-const TEMPLATE_NAME = "retail_festive_sale";
+const TEMPLATE_NAME = "wipz_mega_festive_sale";
 const TEMPLATE_LANG = "mr";
 
 const CSV_PATH   = "./retailers_clean.csv"; // phone,shop,city
@@ -22,7 +22,7 @@ const BATCH_SIZE = 40;     // messages per batch
 const BATCH_DELAY_MS = 5000; // pause between batches (5s)
 const PER_MSG_DELAY_MS = 250; // small stagger within a batch
 
-const BANNER_IMAGE_URL = "https://res.cloudinary.com/dz6fzuzvr/image/upload/v1788728091/ChatGPT_Image_Sep_1_2026_11_32_48_AM_z9gdma.png";
+const BANNER_IMAGE_URL = "https://res.cloudinary.com/dz6fzuzvr/image/upload/v1788936027/Template_day_2_vfrmq2.png";
 
 const LOG_SUCCESS = "./broadcast_success.log";
 const LOG_FAILED  = "./broadcast_failed.log";
