@@ -14,7 +14,7 @@ const axios = require("axios");
 const PHONE_ID = process.env.PHONE_NUMBER_ID;
 const TOKEN    = process.env.ACCESS_TOKEN;
 
-const TEMPLATE_NAME = "second_day_bailpola";
+const TEMPLATE_NAME = "vd_retailer";
 const TEMPLATE_LANG = "mr";
 
 const CSV_PATH   = "./retailers_clean.csv"; // phone,shop,city
@@ -22,7 +22,7 @@ const BATCH_SIZE = 40;     // messages per batch
 const BATCH_DELAY_MS = 5000; // pause between batches (5s)
 const PER_MSG_DELAY_MS = 250; // small stagger within a batch
 
-const BANNER_IMAGE_URL = "https://res.cloudinary.com/dz6fzuzvr/image/upload/v1789025314/Bailpola_3_day_left_bqmcxp.png";
+const VIDEO_URL = "https://res.cloudinary.com/dz6fzuzvr/video/upload/v1789101009/RetailerVideo16mComprs_fuxjqk.mp4";
 
 const LOG_SUCCESS = "./broadcast_success.log";
 const LOG_FAILED  = "./broadcast_failed.log";
@@ -45,7 +45,7 @@ function buildComponents(retailer) {
     {
       type: "header",
       parameters: [
-        { type: "image", image: { link: BANNER_IMAGE_URL } }
+        { type: "video", video: { link: VIDEO_URL } }
       ]
     }
   ];
