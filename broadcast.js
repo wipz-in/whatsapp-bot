@@ -1,28 +1,32 @@
 // broadcast.js
-// One-off script to send the "wipz_mega_festive_sale" template to all retailers.
+// One-off script to send a WhatsApp template to all retailers.
 // Run with: node broadcast.js
 //
 // Requires the same env vars your bot already uses on Render:
 //   PHONE_NUMBER_ID, ACCESS_TOKEN
 // You can run this LOCALLY (export those two vars in your shell first)
-// or as a one-off Render Shell command / Job — it does not need to run
-// on the always-on web service.
+// or via the GitHub Actions workflow — it does not need Render at all.
 
-const fs    = require("fs");
-const axios = require("axios");
+const fs       = require("fs");
+const axios    = require("axios");
+const FormData = require("form-data");
 
 const PHONE_ID = process.env.PHONE_NUMBER_ID;
 const TOKEN    = process.env.ACCESS_TOKEN;
 
-const TEMPLATE_NAME = "vd_retailer";
-const TEMPLATE_LANG = "mr";
+const TEMPLATE_NAME = "wipz_catalog_pdf"; // <-- set to your approved document template name
+const TEMPLATE_LANG = "mr";               // confirm this matches the template's submitted language
 
 const CSV_PATH   = "./retailers_clean.csv"; // phone,shop,city
 const BATCH_SIZE = 40;     // messages per batch
 const BATCH_DELAY_MS = 5000; // pause between batches (5s)
 const PER_MSG_DELAY_MS = 250; // small stagger within a batch
 
-const VIDEO_URL = "https://res.cloudinary.com/dz6fzuzvr/video/upload/v1789101009/RetailerVideo16mComprs_fuxjqk.mp4";
+// ---- Document to send ----
+// Add the PDF file to your repo root (or any path) and point to it here.
+const DOCUMENT_PATH     = "./WIPZ Women Footwear Catalogue 2026.pdf";
+const DOCUMENT_MIME     = "application/pdf";
+const DOCUMENT_FILENAME = "WIPZ_Catalog.pdf"; // shown as the filename in the chat
 
 const LOG_SUCCESS = "./broadcast_success.log";
 const LOG_FAILED  = "./broadcast_failed.log";
@@ -38,14 +42,28 @@ function loadRetailers() {
   }).filter(r => /^\d{12}$/.test(r.phone)); // 91 + 10 digits
 }
 
-// If your template has NO variables in the body, leave components as [].
-// If it does (e.g. {{1}} for shop name), uncomment and adjust below.
-function buildComponents(retailer) {
+// Uploads the file once to Meta's own servers and returns a media_id
+// you can reuse for every message in this run — no external hosting needed.
+async function uploadMediaToMeta(filePath, mimeType) {
+  const form = new FormData();
+  form.append("file", fs.createReadStream(filePath), { contentType: mimeType });
+  form.append("type", mimeType);
+  form.append("messaging_product", "whatsapp");
+
+  const res = await axios.post(
+    `https://graph.facebook.com/v25.0/${PHONE_ID}/media`,
+    form,
+    { headers: { Authorization: `Bearer ${TOKEN}`, ...form.getHeaders() } }
+  );
+  return res.data.id;
+}
+
+function buildComponents(retailer, mediaId) {
   return [
     {
       type: "header",
       parameters: [
-        { type: "video", video: { link: VIDEO_URL } }
+        { type: "document", document: { id: mediaId, filename: DOCUMENT_FILENAME } }
       ]
     }
   ];
@@ -59,7 +77,7 @@ function buildComponents(retailer) {
   // }
 }
 
-async function sendTemplate(retailer) {
+async function sendTemplate(retailer, mediaId) {
   const payload = {
     messaging_product: "whatsapp",
     to: retailer.phone,
@@ -67,7 +85,7 @@ async function sendTemplate(retailer) {
     template: {
       name: TEMPLATE_NAME,
       language: { code: TEMPLATE_LANG },
-      components: buildComponents(retailer)
+      components: buildComponents(retailer, mediaId)
     }
   };
 
@@ -94,6 +112,10 @@ async function main() {
     process.exit(1);
   }
 
+  console.log(`Uploading ${DOCUMENT_PATH} to Meta...`);
+  const mediaId = await uploadMediaToMeta(DOCUMENT_PATH, DOCUMENT_MIME);
+  console.log(`Uploaded. media_id = ${mediaId}`);
+
   const retailers = loadRetailers();
   console.log(`Loaded ${retailers.length} retailers. Starting broadcast...`);
 
@@ -104,7 +126,7 @@ async function main() {
     console.log(`\nBatch ${Math.floor(i / BATCH_SIZE) + 1} — sending ${batch.length} messages...`);
 
     for (const retailer of batch) {
-      const ok = await sendTemplate(retailer);
+      const ok = await sendTemplate(retailer, mediaId);
       if (ok) sent++; else failed++;
       await sleep(PER_MSG_DELAY_MS);
     }
