@@ -1,7 +1,7 @@
 name: Send Festive Sale Broadcast
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch: {}   # adds a manual "Run workflow" button in the Actions tab
 
 jobs:
   broadcast:
@@ -16,7 +16,7 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: npm install axios
+        run: npm install axios form-data
 
       - name: Run broadcast script
         env:
